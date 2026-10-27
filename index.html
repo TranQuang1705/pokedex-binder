@@ -579,6 +579,7 @@ async function jpSetCard(setId, num, lang = "ja") {
 }
 function toJaName(s, lang = "ja") {
   const target = lang === "ko" ? NAMES_KO : NAMES_JA;
+  s = splitSuffix(s)[0];
   const low = s.toLowerCase();
   let i = NAMES_EN.findIndex(n => n.toLowerCase() === low);
   if (i < 0) i = NAMES_KO.indexOf(s);
@@ -648,6 +649,16 @@ function normTP(r) {
     tcgUrl: `https://www.tcgplayer.com/product/${pid}`, cmUrl: "", priceAt: tpData.updated || ""
   };
 }
+function krTwin(c) {
+  const d = c.dex[0];
+  return Object.assign({}, c, {
+    src: "kr", via: "jp-twin", key: "kr:" + c.key, id: "kr-" + c.id, imgNote: "Ảnh bản Nhật",
+    name: c.name.replace(/ \(JP\)$/, " (KR)"),
+    sub: d ? NAMES_KO[d - 1] + (splitSuffix(c.name.replace(/ \(JP\)$/, ""))[1] ? " " + splitSuffix(c.name.replace(/ \(JP\)$/, ""))[1] : "") : "",
+    rows: c.rows.map(([l, v, bold]) => ["Bản Nhật cùng mã (tham khảo) · " + l.replace("TCGplayer · ", ""), v, bold]),
+    variantLabel: "giá bản Nhật cùng mã"
+  });
+}
 function tpRowById(pid) { return tpData && tpData.cards.find(r => r[0] === pid); }
 function tpSearch(raw) {
   if (!tpData) return [];
@@ -671,17 +682,33 @@ function tpSearch(raw) {
   }
   return rows.sort(byDate).slice(0, 30).map(normTP);
 }
+/* "리자몽 ex", "メガリザードンY ex", "charizard ex" -> "Charizard ex"; null when a non-Latin name is unknown */
+const SUFFIX_RE = /\s*(ex|EX|GX|V|VMAX|VSTAR|BREAK|ＧＸ|Ｖ|ＶＭＡＸ|ＶＳＴＡＲ)$/u;
+function splitSuffix(s) {
+  const m = s.trim().match(SUFFIX_RE);
+  if (!m) return [s.trim(), ""];
+  return [s.trim().slice(0, m.index).trim(), m[1].normalize("NFKC")];
+}
 function toEnName(s) {
-  if (/[぀-ヿ一-鿿]/.test(s)) { const i = NAMES_JA.indexOf(s); return i >= 0 ? NAMES_EN[i] : null; }
-  const i = NAMES_KO.indexOf(s); if (i >= 0) return NAMES_EN[i];
-  return s;
+  const [base, suf] = splitSuffix(s);
+  const add = n => (suf ? n + " " + suf : n);
+  let i = NAMES_KO.indexOf(base); if (i >= 0) return add(NAMES_EN[i]);
+  i = NAMES_JA.indexOf(base); if (i >= 0) return add(NAMES_EN[i]);
+  if (/[가-힯぀-ヿ一-鿿]/.test(base)) {
+    // partial match, e.g. "메가리자몽Y" or "ピカチュウV-UNION"
+    let best = -1;
+    NAMES_KO.forEach((n, j) => { if (base.includes(n) && (best < 0 || n.length > NAMES_KO[best].length)) best = j; });
+    if (best < 0) NAMES_JA.forEach((n, j) => { if (base.includes(n) && (best < 0 || n.length > NAMES_JA[best].length)) best = j; });
+    return best >= 0 ? add(NAMES_EN[best]) : null;
+  }
+  return s.trim();
 }
 async function refreshTpOwned() {
   const owned = Object.entries(S.owned).filter(([, o]) => o.card && o.card.tp);
   if (!owned.length) return 0;
   await loadTP(); if (!tpData) return 0;
   let n = 0;
-  for (const [k, o] of owned) { const r = tpRowById(o.card.tp); if (r) { S.owned[k].card = normTP(r); n++; } }
+  for (const [k, o] of owned) { const r = tpRowById(o.card.tp); if (r) { S.owned[k].card = o.card.src === "kr" ? krTwin(normTP(r)) : normTP(r); n++; } }
   save(); renderStats(); return n;
 }
 
@@ -712,6 +739,7 @@ function resultCard(c, i) {
     <div style="min-width:0">
       <h3><span class="flag ${c.src}">${flagOf(c)}</span> ${esc(c.name)}</h3>
       <div class="meta">${c.sub ? esc(c.sub) + " · " : ""}${esc(c.set)} · ${esc(c.number)}${c.total ? "/" + c.total : ""}${c.rarity ? " · " + esc(c.rarity) : ""}<br><code>${esc(c.id)}</code>${target ? ` · Pokédex #${pad(target)}` : ""}</div>
+      ${c.imgNote ? `<div class="meta">${esc(c.imgNote)}, chưa có ảnh bản Hàn</div>` : ""}
       <div class="prices">${rows}</div>
       ${linkRow(c)}
       <div class="act">${target
@@ -726,7 +754,7 @@ function renderResults(list) {
   const en = list.map((c, i) => [c, i]).filter(([c]) => c.src === "en");
   let h = "";
   if (jp.length) h += `<div class="grp">Thẻ Nhật · ${jp[0][0].via === "tcgplayer" ? "TCGplayer, giá ngày " + esc(tpData?.updated || "") : "TCGdex"}</div>` + jp.map(([c, i]) => resultCard(c, i)).join("");
-  if (kr.length) h += `<div class="grp">Thẻ Hàn · TCGdex</div>` + kr.map(([c, i]) => resultCard(c, i)).join("");
+  if (kr.length) h += `<div class="grp">Thẻ Hàn · ${kr[0][0].via === "jp-twin" ? "dựng từ bản Nhật cùng mã" : "TCGdex"}</div>` + kr.map(([c, i]) => resultCard(c, i)).join("");
   if (en.length) h += `<div class="grp">Thẻ Anh · pokemontcg.io</div>` + en.map(([c, i]) => resultCard(c, i)).join("");
   $("results").innerHTML = h;
   document.querySelectorAll("#results .thumb").forEach(t => { t._card = lastResults[+t.dataset.i]; });
@@ -752,7 +780,13 @@ async function doSearch(q) {
   };
   const krAll = async () => {
     await loadTP();  // for the Japanese twin price
-    return (await jpLookup(q, "ko")).map(c => normJP(c, "ko")).sort((a, b) => (b.img ? 1 : 0) - (a.img ? 1 : 0));
+    let found = [];
+    try { found = (await jpLookup(q, "ko")).map(c => normJP(c, "ko")); } catch (e) { found = []; }
+    if (found.length) return found.sort((a, b) => (b.img ? 1 : 0) - (a.img ? 1 : 0));
+    // Korean prints mostly mirror the Japanese set: build the Korean version from the Japanese card
+    const isCode = /\d+\s*\/\s*[a-z0-9-]+$/i.test(q) || /^[a-z0-9-]+ [a-z]*\d+[a-z]*$/i.test(q.trim());
+    const limit = isCode ? 12 : /[가-힯]/.test(q) ? 6 : 0;
+    return tpSearch(q).slice(0, limit).map(krTwin);
   };
   const [jp, en, kr] = await Promise.allSettled([jpAll(), lookup(q), krAll()]);
   const list = [
@@ -779,7 +813,7 @@ $("sForm").onsubmit = e => { e.preventDefault(); doSearch($("sInput").value); };
 $("chips").onclick = e => { if (e.target.tagName === "BUTTON") doSearch(e.target.textContent); };
 
 async function refetch(c) {
-  if (c.tp) { await loadTP(); const r = tpRowById(c.tp); return r ? normTP(r) : null; }
+  if (c.tp) { await loadTP(); const r = tpRowById(c.tp); return r ? (c.src === "kr" ? krTwin(normTP(r)) : normTP(r)) : null; }
   if (c.src === "jp" || c.src === "kr") {
     const lang = c.src === "kr" ? "ko" : "ja";
     if (lang === "ko") await loadTP();
