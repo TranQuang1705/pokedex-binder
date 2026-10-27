@@ -12,6 +12,7 @@ OUT = "data/tcgplayer-jp.json"
 
 
 def get(url, tries=3):
+    last = ""
     for i in range(tries):
         try:
             req = urllib.request.Request(url, headers=UA)
@@ -20,9 +21,10 @@ def get(url, tries=3):
             time.sleep(0.15)
             return data
         except Exception as e:  # noqa: BLE001
-            print(f"  retry {i + 1} {url}: {e}", file=sys.stderr)
+            last = f"{type(e).__name__}: {e}"
+            print(f"  retry {i + 1} {url}: {last}", file=sys.stderr)
             time.sleep(5 * (i + 1))
-    raise RuntimeError(f"failed: {url}")
+    raise RuntimeError(f"failed: {url} ({last})")
 
 
 def find_category():
@@ -31,7 +33,8 @@ def find_category():
         name = (c.get("name") or "") + " " + (c.get("displayName") or "")
         if "pokemon" in name.lower().replace("é", "e") and "japan" in name.lower():
             return c["categoryId"], c.get("displayName") or c.get("name")
-    raise RuntimeError("Pokemon Japan category not found")
+    names = ", ".join(f"{c['categoryId']}={c.get('name')}" for c in cats if "poke" in (c.get("name") or "").lower())
+    raise RuntimeError(f"Pokemon Japan category not found (pokemon-like: {names})")
 
 
 def ext(product, key):
@@ -82,4 +85,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:  # noqa: BLE001
+        # shows up as an annotation on the run page
+        print(f"::error title=Sync failed::{type(e).__name__}: {e}")
+        sys.exit(1)
