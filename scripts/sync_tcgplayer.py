@@ -3,7 +3,7 @@
 Runs daily from GitHub Actions. tcgcsv updates around 20:00 UTC; it asks for a custom
 User-Agent and ~100 ms between requests, so this script keeps to that.
 """
-import json, sys, time, urllib.request
+import json, os, sys, time, urllib.request
 from datetime import datetime, timezone
 
 BASE = "https://tcgcsv.com/tcgplayer"
@@ -79,6 +79,7 @@ def main():
         raise RuntimeError(f"only {len(cards)} cards, refusing to overwrite data")
     data = {"updated": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "category": cat_id,
             "groups": out_groups, "cards": cards}
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     print(f"wrote {len(cards)} cards in {len(out_groups)} sets")
