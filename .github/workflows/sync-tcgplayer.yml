@@ -1,0 +1,38 @@
+name: Sync TCGplayer JP data
+
+on:
+  schedule:
+    - cron: "41 21 * * *"   # daily, after tcgcsv's ~20:00 UTC refresh
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/sync_tcgplayer.py
+      - .github/workflows/sync-tcgplayer.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-tcgplayer
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pull data
+        run: python scripts/sync_tcgplayer.py
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/tcgplayer-jp.json
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -m "Update TCGplayer JP data $(date -u +%F)"
+          git pull --rebase origin main
+          git push
