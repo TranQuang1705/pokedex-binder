@@ -570,6 +570,78 @@ async function jpLookup(raw) {
   return (await Promise.all(pick.map(b => td(`/cards/${encodeURIComponent(b.id)}`).catch(() => null)))).filter(Boolean);
 }
 
+/* ---------- Japanese cards from TCGplayer (file refreshed daily by the repo's sync job) ---------- */
+let tpData = null, tpPromise = null;
+function loadTP() {
+  if (!tpPromise) tpPromise = fetch("data/tcgplayer-jp.json", { cache: "no-cache" })
+    .then(r => (r.ok ? r.json() : null)).catch(() => null).then(d => (tpData = d && d.cards ? d : null));
+  return tpPromise;
+}
+const normKey = s => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+  .replace(/♀/g, " f").replace(/♂/g, " m").replace(/[^a-z0-9]+/g, " ").trim();
+let EN_KEYS = null;
+function enToDex(name) {
+  if (!EN_KEYS) EN_KEYS = NAMES_EN.map((n, i) => [" " + normKey(n) + " ", i + 1]).sort((a, b) => b[0].length - a[0].length);
+  const k = " " + normKey(String(name).replace(/\s+-\s+.*$/, "").replace(/\(.*?\)/g, "")) + " ";
+  for (const [nk, d] of EN_KEYS) if (k.includes(nk)) return d;
+  return null;
+}
+const numKey = s => String(s).toUpperCase().split("/").map(p => (/^\d+$/.test(p.trim()) ? String(+p) : p.trim())).join("/");
+const TP_ORDER = ["Holofoil", "Normal", "Reverse Holofoil", "1st Edition Holofoil", "1st Edition"];
+function normTP(r) {
+  const [pid, name, number, rarity, gid, prices] = r;
+  const g = tpData.groups[gid] || ["", "", ""];
+  const dex = enToDex(name);
+  const keys = Object.keys(prices || {}).sort((a, b) => ((TP_ORDER.indexOf(a) + 99) % 99) - ((TP_ORDER.indexOf(b) + 99) % 99));
+  const [num, total] = String(number).split("/");
+  return {
+    src: "jp", via: "tcgplayer", tp: pid, key: "tp:" + pid, id: "tcgplayer-" + pid,
+    name: String(name).replace(/\s+-\s+.*$/, "") + " (JP)", sub: dex ? NAMES_JA[dex - 1] : "",
+    set: g[0], setId: g[1], number: num, total: total || "", rarity: rarity || "",
+    img: `https://tcgplayer-cdn.tcgplayer.com/product/${pid}_200w.jpg`,
+    imgL: `https://tcgplayer-cdn.tcgplayer.com/product/${pid}_in_1000x1000.jpg`,
+    dex: dex ? [dex] : [], usd: keys.length ? prices[keys[0]] : null, variant: "", variantLabel: keys[0] || "", eur: null,
+    rows: keys.map(k => ["TCGplayer · " + k, money(prices[k]), true]),
+    tcgUrl: `https://www.tcgplayer.com/product/${pid}`, cmUrl: "", priceAt: tpData.updated || ""
+  };
+}
+function tpRowById(pid) { return tpData && tpData.cards.find(r => r[0] === pid); }
+function tpSearch(raw) {
+  if (!tpData) return [];
+  const s = raw.trim().replace(/\s+/g, " ");
+  const byDate = (a, b) => ((tpData.groups[b[4]] || [])[2] || "").localeCompare((tpData.groups[a[4]] || [])[2] || "");
+  let m, rows = [];
+  if ((m = s.match(/^(?:(.+?) )?([a-z0-9-]*\d+[a-z]*)\s*\/\s*([a-z0-9-]+)$/i))) {
+    const key = numKey(m[2] + "/" + m[3]);
+    rows = tpData.cards.filter(r => numKey(r[2]) === key);
+    if (m[1]) { const en = toEnName(m[1]); if (en) rows = rows.filter(r => normKey(r[1]).includes(normKey(en))); }
+  } else if ((m = s.match(/^([a-z0-9-]+)[ ]([a-z]*\d+[a-z]*)$/i)) &&
+             Object.values(tpData.groups).some(g => g[1].toLowerCase() === m[1].toLowerCase())) {
+    const gids = new Set(Object.entries(tpData.groups).filter(([, g]) => g[1].toLowerCase() === m[1].toLowerCase()).map(([id]) => +id));
+    const n = numKey(m[2]);
+    rows = tpData.cards.filter(r => gids.has(r[4]) && numKey(String(r[2]).split("/")[0]) === n);
+  } else {
+    const en = toEnName(s);
+    if (!en) return [];
+    const k = " " + normKey(en) + " ";
+    rows = tpData.cards.filter(r => (" " + normKey(r[1]) + " ").includes(k));
+  }
+  return rows.sort(byDate).slice(0, 30).map(normTP);
+}
+function toEnName(s) {
+  if (/[぀-ヿ一-鿿]/.test(s)) { const i = NAMES_JA.indexOf(s); return i >= 0 ? NAMES_EN[i] : null; }
+  const i = NAMES_KO.indexOf(s); if (i >= 0) return NAMES_EN[i];
+  return s;
+}
+async function refreshTpOwned() {
+  const owned = Object.entries(S.owned).filter(([, o]) => o.card && o.card.tp);
+  if (!owned.length) return 0;
+  await loadTP(); if (!tpData) return 0;
+  let n = 0;
+  for (const [k, o] of owned) { const r = tpRowById(o.card.tp); if (r) { S.owned[k].card = normTP(r); n++; } }
+  save(); renderStats(); return n;
+}
+
 /* ---------- results ---------- */
 let lastResults = [];
 function linkRow(c) {
@@ -604,7 +676,7 @@ function renderResults(list) {
   const jp = list.map((c, i) => [c, i]).filter(([c]) => c.src === "jp");
   const en = list.map((c, i) => [c, i]).filter(([c]) => c.src === "en");
   let h = "";
-  if (jp.length) h += `<div class="grp">Thẻ Nhật · TCGdex</div>` + jp.map(([c, i]) => resultCard(c, i)).join("");
+  if (jp.length) h += `<div class="grp">Thẻ Nhật · ${jp[0][0].via === "tcgplayer" ? "TCGplayer, giá ngày " + esc(tpData?.updated || "") : "TCGdex"}</div>` + jp.map(([c, i]) => resultCard(c, i)).join("");
   if (en.length) h += `<div class="grp">Thẻ Anh · pokemontcg.io</div>` + en.map(([c, i]) => resultCard(c, i)).join("");
   $("results").innerHTML = h;
   document.querySelectorAll("#results .thumb").forEach(t => { t._card = lastResults[+t.dataset.i]; });
@@ -622,9 +694,15 @@ $("results").addEventListener("click", e => {
 async function doSearch(q) {
   $("sInput").value = q;
   $("status").className = "status"; $("status").textContent = "Đang tra thẻ Nhật và thẻ Anh…"; $("results").innerHTML = "";
-  const [jp, en] = await Promise.allSettled([jpLookup(q), lookup(q)]);
+  const jpAll = async () => {
+    await loadTP();
+    const tp = tpSearch(q);
+    if (tp.length) return tp;
+    return (await jpLookup(q)).map(normJP).sort((a, b) => (b.img ? 1 : 0) - (a.img ? 1 : 0));
+  };
+  const [jp, en] = await Promise.allSettled([jpAll(), lookup(q)]);
   const list = [
-    ...(jp.status === "fulfilled" ? jp.value.map(normJP).sort((a, b) => (b.img ? 1 : 0) - (a.img ? 1 : 0)) : []),
+    ...(jp.status === "fulfilled" ? jp.value : []),
     ...(en.status === "fulfilled" ? en.value.map(normEN) : [])
   ];
   const errs = [jp, en].filter(r => r.status === "rejected").map(r => r.reason);
@@ -645,6 +723,7 @@ $("sForm").onsubmit = e => { e.preventDefault(); doSearch($("sInput").value); };
 $("chips").onclick = e => { if (e.target.tagName === "BUTTON") doSearch(e.target.textContent); };
 
 async function refetch(c) {
+  if (c.tp) { await loadTP(); const r = tpRowById(c.tp); return r ? normTP(r) : null; }
   if (c.src === "jp") { const r = await td(`/cards/${encodeURIComponent(c.id)}`); return r ? normJP(r) : null; }
   const r = await api({ q: `id:"${c.id}"` }); return r[0] ? normEN(r[0]) : null;
 }
@@ -696,7 +775,8 @@ $("refresh").onclick = async e => {
   if (!entries.length) return toast("Chưa có thẻ nào để cập nhật");
   const btn = e.target; btn.disabled = true;
   try {
-    const en = entries.filter(([, o]) => (o.card.src || "en") === "en"), jp = entries.filter(([, o]) => o.card.src === "jp");
+    await refreshTpOwned();
+    const en = entries.filter(([, o]) => (o.card.src || "en") === "en"), jp = entries.filter(([, o]) => o.card.src === "jp" && !o.card.tp);
     for (let i = 0; i < en.length; i += 40) {
       btn.textContent = `Đang cập nhật thẻ Anh ${i}/${en.length}…`;
       const chunk = en.slice(i, i + 40);
@@ -735,6 +815,7 @@ document.addEventListener("keydown", e => {
 });
 
 buildNav(); renderStats(); renderBinder();
+refreshTpOwned().then(n => { if (n) renderBinder(); });
 </script>
 
 </body>
