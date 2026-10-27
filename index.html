@@ -84,6 +84,17 @@ select.btn{padding-right:8px}
 .pocket.manual .spr{filter:none;opacity:1}
 .pocket.manual .nm{color:var(--ink)}
 .pocket .cardimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:14% 6% 8%;
+  border-radius:7px;border:3px solid #c9cfdd;background:linear-gradient(170deg,#3a4260,#252a3b);text-align:center;overflow:hidden}
+.ph.jp{border-color:#e9c35a}
+.ph-flag{position:absolute;top:5px;right:6px;font:700 9px/1 var(--f-display);padding:2px 4px;border-radius:3px;background:#0f1219;color:var(--ink-2)}
+.ph.jp .ph-flag{color:var(--red)}
+.ph-art{width:72%;max-width:100%;filter:drop-shadow(0 4px 6px rgba(0,0,0,.5))}
+.ph-name{font-size:11px;font-weight:700;color:var(--ink);line-height:1.2;overflow-wrap:anywhere}
+.ph-set{font:600 10px var(--f-display);color:var(--ink-2)}
+.ph-note{font-size:9px;color:var(--ink-3)}
+.res .thumb{position:relative;width:96px;aspect-ratio:63/88;align-self:start}
+.res .thumb img:not(.ph-art){width:100%;height:100%;object-fit:cover}
 .pocket .tag{position:absolute;right:4px;bottom:4px;background:rgba(10,12,18,.85);border:1px solid var(--accent);color:var(--accent);
   font:700 10px var(--f-display);border-radius:4px;padding:1px 4px;font-variant-numeric:tabular-nums;z-index:1}
 .pocket .tick{position:absolute;top:4px;right:5px;color:var(--ok);font-weight:700;font-size:12px}
@@ -119,7 +130,7 @@ select.btn{padding-right:8px}
 .status.err{color:var(--red)}
 .results{display:flex;flex-direction:column;gap:10px;max-height:65vh;overflow:auto}
 .res{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;background:var(--page);border-radius:10px;padding:8px}
-.res img{width:96px;border-radius:5px;display:block}
+.res .thumb>img{border-radius:5px;display:block}
 .res h3{margin:0;font-size:14.5px}
 .res .meta{font-size:12px;color:var(--ink-3)}
 .prices{display:flex;flex-direction:column;gap:2px;margin:6px 0;font-size:12.5px;font-variant-numeric:tabular-nums}
@@ -263,7 +274,7 @@ function bestPrice(card) {
   const p = card.tcgplayer && card.tcgplayer.prices;
   if (p) {
     const keys = Object.keys(p).sort((a, b) => (VARIANT_ORDER.indexOf(a) + 99) % 99 - (VARIANT_ORDER.indexOf(b) + 99) % 99);
-    for (const k of keys) { const v = p[k].market ?? p[k].mid ?? p[k].low; if (v != null) return { usd: v, variant: k }; }
+    for (const k of keys) { const v = p[k].market ?? p[k].mid ?? p[k].low; if (v > 0) return { usd: v, variant: k }; }
   }
   return { usd: null, variant: null };
 }
@@ -273,18 +284,33 @@ const krw = v => (v == null || !S.krw) ? "" : " · ₩" + Math.round(v * S.krw).
 const VARIANT_TD = { normal:"Thường", holofoil:"Holo", "reverse-holofoil":"Reverse holo", reverse:"Reverse holo", "1st-edition":"1st Ed", "1st-edition-holofoil":"1st Ed holo", unlimited:"Unlimited", "unlimited-holofoil":"Unlimited holo" };
 const TD_ORDER = ["holofoil","normal","reverse-holofoil","reverse","1st-edition-holofoil","1st-edition","unlimited-holofoil","unlimited"];
 
+const pos = v => (typeof v === "number" && v > 0) ? v : null;
+/* Card frame drawn when the source has no picture of the card */
+function placeholder(c, n) {
+  const dex = n || (c.dex || [])[0];
+  return `<div class="ph ${c.src === "jp" ? "jp" : ""}"><span class="ph-flag">${c.src === "jp" ? "JP" : "EN"}</span>` +
+    (dex ? `<img class="ph-art" alt="" src="${SPR(dex)}">` : "") +
+    `<span class="ph-name">${esc(c.sub || c.name)}</span><span class="ph-set">${esc(c.number || "")}${c.total ? "/" + c.total : ""}</span>` +
+    `<span class="ph-note">Chưa có ảnh</span></div>`;
+}
+function swapToPlaceholder(img) {
+  const holder = img.closest("[data-ph]"); if (!holder) return;
+  const c = holder._card; if (!c) return;
+  img.outerHTML = placeholder(c, +holder.dataset.ph || 0);
+}
+
 /* English card from pokemontcg.io -> common shape */
 function normEN(card) {
   const bp = bestPrice(card), rows = [];
   for (const [k, v] of Object.entries(card.tcgplayer?.prices || {})) {
     const val = v.market ?? v.mid ?? v.low;
-    if (val != null) rows.push(["TCGplayer · " + (VARIANT_VI[k] || k), money(val), true]);
+    if (val > 0) rows.push(["TCGplayer · " + (VARIANT_VI[k] || k), money(val), true]);
   }
-  const cm = card.cardmarket?.prices, eur = cm ? (cm.trendPrice ?? cm.averageSellPrice ?? null) : null;
+  const cm = card.cardmarket?.prices, eur = pos(cm?.trendPrice) ?? pos(cm?.averageSellPrice);
   if (eur != null) rows.push(["Cardmarket trend", "€" + eur.toFixed(2), false]);
   return {
     src: "en", key: "en:" + card.id, id: card.id, name: card.name, sub: "",
-    set: card.set?.name, setId: card.set?.id, number: card.number, total: card.set?.printedTotal, rarity: card.rarity || "",
+    set: card.set?.name, setId: card.set?.id, number: card.number, total: card.set?.printedTotal, rarity: card.rarity && card.rarity !== "None" ? card.rarity : "",
     img: card.images?.small, imgL: card.images?.large, dex: card.nationalPokedexNumbers || [],
     usd: bp.usd, variant: bp.variant, variantLabel: bp.variant ? (VARIANT_VI[bp.variant] || bp.variant) : "", eur, rows,
     tcgUrl: card.tcgplayer?.url || "", cmUrl: card.cardmarket?.url || "",
@@ -307,11 +333,11 @@ function normJP(card) {
     .sort((a, b) => ((TD_ORDER.indexOf(a) + 99) % 99) - ((TD_ORDER.indexOf(b) + 99) % 99));
   for (const k of keys) {
     const v = tp[k], val = v.marketPrice ?? v.midPrice ?? v.lowPrice;
-    if (val == null) continue;
+    if (!(val > 0)) continue;
     rows.push(["TCGplayer · " + (VARIANT_TD[k] || k), money(val), true]);
     if (usd == null) { usd = val; variant = VARIANT_TD[k] || k; }
   }
-  const eur = cm["trend-holo"] ?? cm.trend ?? cm["avg-holo"] ?? cm.avg ?? null;
+  const eur = pos(cm["trend-holo"]) ?? pos(cm.trend) ?? pos(cm["avg-holo"]) ?? pos(cm.avg);
   if (eur != null) rows.push(["Cardmarket trend", "€" + eur.toFixed(2), false]);
   let dex = (card.dexId || []).filter(n => n >= 1 && n <= TOTAL);
   if (!dex.length) { const d = jaToDex(card.name); if (d) dex = [d]; }
@@ -319,7 +345,7 @@ function normJP(card) {
   const img = card.image ? card.image + "/low.webp" : "", imgL = card.image ? card.image + "/high.webp" : "";
   return {
     src: "jp", key: "jp:" + card.id, id: card.id, name: en + " (JP)", sub: card.name,
-    set: card.set?.name, setId: card.set?.id, number: card.localId, total: card.set?.cardCount?.official, rarity: card.rarity || "",
+    set: card.set?.name, setId: card.set?.id, number: card.localId, total: card.set?.cardCount?.official, rarity: card.rarity && card.rarity !== "None" ? card.rarity : "",
     img, imgL, dex, usd, variant: "", variantLabel: variant, eur, rows,
     tcgUrl: "https://www.tcgplayer.com/search/pokemon-japan/product?productLineName=pokemon-japan&q=" + encodeURIComponent(en + " " + (card.localId || "")),
     cmUrl: "", priceAt: tp.updated || cm.updated || ""
@@ -380,7 +406,10 @@ function renderBinder() {
     cell.dataset.no = n;
     cell.setAttribute("aria-label", `#${n} ${NAMES_EN[n-1]}${o ? " – đã có" : ""}`);
     if (o && o.card) {
-      cell.innerHTML = `<span class="no">${pad(n)}</span><img class="cardimg" loading="lazy" alt="" src="${esc(o.card.img)}">` +
+      cell.dataset.ph = n; cell._card = o.card;
+      cell.innerHTML = `<span class="no">${pad(n)}</span>` + (o.card.img
+        ? `<img class="cardimg" loading="lazy" alt="" src="${esc(o.card.img)}" onerror="swapToPlaceholder(this)">`
+        : placeholder(o.card, n)) +
         (o.card.usd != null ? `<span class="tag">${money(o.card.usd)}</span>` : "");
     } else {
       cell.innerHTML = `<span class="no">${pad(n)}</span>${o ? '<span class="tick">✓</span>' : ""}<img class="spr" loading="lazy" alt="" src="${SPR(n)}"><span class="nm">${esc(NAMES_EN[n-1])}</span>`;
@@ -559,7 +588,7 @@ function resultCard(c, i) {
   const rows = c.rows.length ? c.rows.map(([l, v, b]) => `<div><span>${esc(l)}</span>${b ? `<b>${esc(v)}</b>` : `<span>${esc(v)}</span>`}</div>`).join("")
     : `<div><span>${c.src === "jp" ? "Nguồn này chưa có giá cho thẻ này, bấm TCGplayer để xem" : "Chưa có dữ liệu giá"}</span></div>`;
   return `<article class="res">
-    ${c.img ? `<img src="${esc(c.img)}" alt="${esc(c.name)}" loading="lazy" onerror="this.style.visibility='hidden'">` : `<div></div>`}
+    <div class="thumb" data-ph="${target || 0}" data-i="${i}">${c.img ? `<img src="${esc(c.img)}" alt="${esc(c.name)}" loading="lazy" onerror="swapToPlaceholder(this)">` : placeholder(c, target)}</div>
     <div style="min-width:0">
       <h3><span class="flag ${c.src}">${c.src === "jp" ? "JP" : "EN"}</span> ${esc(c.name)}</h3>
       <div class="meta">${c.sub ? esc(c.sub) + " · " : ""}${esc(c.set)} · ${esc(c.number)}${c.total ? "/" + c.total : ""}${c.rarity ? " · " + esc(c.rarity) : ""}<br><code>${esc(c.id)}</code>${target ? ` · Pokédex #${pad(target)}` : ""}</div>
@@ -578,6 +607,7 @@ function renderResults(list) {
   if (jp.length) h += `<div class="grp">Thẻ Nhật · TCGdex</div>` + jp.map(([c, i]) => resultCard(c, i)).join("");
   if (en.length) h += `<div class="grp">Thẻ Anh · pokemontcg.io</div>` + en.map(([c, i]) => resultCard(c, i)).join("");
   $("results").innerHTML = h;
+  document.querySelectorAll("#results .thumb").forEach(t => { t._card = lastResults[+t.dataset.i]; });
 }
 $("results").addEventListener("click", e => {
   const b = e.target.closest("[data-add]"); if (!b) return;
@@ -594,7 +624,7 @@ async function doSearch(q) {
   $("status").className = "status"; $("status").textContent = "Đang tra thẻ Nhật và thẻ Anh…"; $("results").innerHTML = "";
   const [jp, en] = await Promise.allSettled([jpLookup(q), lookup(q)]);
   const list = [
-    ...(jp.status === "fulfilled" ? jp.value.map(normJP) : []),
+    ...(jp.status === "fulfilled" ? jp.value.map(normJP).sort((a, b) => (b.img ? 1 : 0) - (a.img ? 1 : 0)) : []),
     ...(en.status === "fulfilled" ? en.value.map(normEN) : [])
   ];
   const errs = [jp, en].filter(r => r.status === "rejected").map(r => r.reason);
