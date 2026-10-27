@@ -172,7 +172,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <header class="top">
     <div class="brand">
       <h1>POKÉDEX <span>BINDER</span></h1>
-      <p>1025 ô · binder 4×4 · 16 thẻ mỗi trang · lưu trên máy này</p>
+      <p>1025 ô · binder 4×4 · 16 thẻ mỗi trang · <span id="appVer">bản 28/10 #3</span></p>
     </div>
     <div class="stats">
       <div class="stat"><small>Đã có</small><b id="sOwned">0 / 1025</b><div class="bar"><i id="sBar"></i></div></div>
@@ -991,6 +991,21 @@ document.addEventListener("keydown", e => {
 });
 
 buildNav(); renderStats(); renderBinder();
+/* Phones keep an old copy of the page for a while: check for a newer version and offer a reload */
+(async () => {
+  try {
+    if (location.protocol !== "https:") return;
+    const t = await (await fetch(location.pathname + "?v=" + Date.now(), { cache: "no-store" })).text();
+    const m = t.match(/id="appVer">([^<]+)</);
+    if (m && m[1] !== $("appVer").textContent) {
+      const bar = document.createElement("button");
+      bar.className = "btn primary"; bar.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:9";
+      bar.textContent = "Có bản mới (" + m[1] + ") · bấm để tải lại";
+      bar.onclick = () => location.replace(location.pathname + "?v=" + Date.now());
+      document.body.append(bar);
+    }
+  } catch (e) {}
+})();
 refreshTpOwned().then(n => { if (n) renderBinder(); });
 renderSyncBox(); syncNow();
 </script>
