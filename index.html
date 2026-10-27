@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Pokédex Binder</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: binder (leather cover + 4x4 sleeve page) on the left, lookup desk on the right; stacks on phones. Single dark "binder at night" world. */
+:root{
+  --leather:#1b1f2a; --leather-2:#232838; --stitch:#3a4157;
+  --page:#2a3042; --sleeve:rgba(255,255,255,.045); --sleeve-edge:rgba(255,255,255,.12);
+  --ink:#eef1f7; --ink-2:#a9b1c6; --ink-3:#6f7891;
+  --accent:#ffcb3a; --accent-ink:#1b1f2a; --red:#ff5b5b; --ok:#47d18c;
+  --f-display:"Chakra Petch", ui-monospace, "SF Mono", Menlo, monospace;
+  --f-body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;overflow-x:hidden;max-width:100%}
+body{background:#12151d;color:var(--ink);font:15px/1.5 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px}
+.brand h1{font:700 28px/1 var(--f-display);margin:0;letter-spacing:.02em}
+.brand h1 span{color:var(--accent)}
+.brand p{margin:6px 0 0;color:var(--ink-2);font-size:13px}
+.stats{display:flex;flex-wrap:wrap;gap:10px}
+.stat{background:var(--leather);border:1px solid var(--stitch);border-radius:10px;padding:8px 14px;min-width:150px}
+.stat b{display:block;font:700 22px/1.15 var(--f-display);font-variant-numeric:tabular-nums}
+.stat small{color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+.bar{height:5px;background:#0d1016;border-radius:3px;margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .4s}
+
+.tabs{display:flex;gap:6px}
+.tab{background:transparent;border:1px solid var(--stitch);border-radius:999px;padding:6px 14px;color:var(--ink-2)}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+
+.main{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:18px;align-items:start}
+@media (max-width:900px){.main{grid-template-columns:minmax(0,1fr)}}
+
+/* binder */
+.binder{background:linear-gradient(160deg,var(--leather-2),var(--leather));border-radius:18px;padding:14px;
+  border:1px solid #2f3548;box-shadow:0 20px 50px rgba(0,0,0,.45), inset 0 0 0 6px var(--leather), inset 0 0 0 7px var(--stitch)}
+.bnav{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 6px 12px}
+.bnav .pg{font:600 15px var(--f-display);font-variant-numeric:tabular-nums;margin-right:auto}
+.bnav .pg em{font-style:normal;color:var(--ink-3);font-size:12px;margin-left:6px}
+.btn{background:var(--page);border:1px solid var(--sleeve-edge);border-radius:8px;padding:6px 12px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+.btn.danger{color:var(--red)}
+select.btn{padding-right:8px}
+.gens{display:flex;flex-wrap:wrap;gap:4px;padding:0 6px 12px}
+.gens button{background:transparent;border:1px solid var(--stitch);color:var(--ink-2);border-radius:6px;padding:2px 8px;font:600 12px var(--f-display)}
+.gens button.on{border-color:var(--accent);color:var(--accent)}
+
+.page{background:var(--page);border-radius:10px;padding:12px;position:relative;
+  background-image:radial-gradient(circle at 0 50%,#12151d 0 7px,transparent 8px);background-size:18px 25%;background-repeat:repeat-y;padding-left:26px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.pocket{position:relative;aspect-ratio:63/88;border-radius:7px;background:var(--sleeve);border:1px solid var(--sleeve-edge);
+  overflow:hidden;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.pocket::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:7px;
+  background:linear-gradient(115deg,rgba(255,255,255,.10) 0%,rgba(255,255,255,0) 28%,rgba(255,255,255,0) 70%,rgba(255,255,255,.05) 100%)}
+.pocket:hover{border-color:var(--accent)}
+.pocket .no{position:absolute;top:5px;left:7px;font:600 11px var(--f-display);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.pocket .spr{width:70%;max-width:100%;filter:grayscale(1) brightness(.55);opacity:.55}
+.pocket .nm{font-size:11px;color:var(--ink-3);padding:0 4px;line-height:1.2;margin-top:2px;overflow-wrap:anywhere}
+.pocket.manual{border-color:var(--ok)}
+.pocket.manual .spr{filter:none;opacity:1}
+.pocket.manual .nm{color:var(--ink)}
+.pocket .cardimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.pocket .tag{position:absolute;right:4px;bottom:4px;background:rgba(10,12,18,.85);border:1px solid var(--accent);color:var(--accent);
+  font:700 10px var(--f-display);border-radius:4px;padding:1px 4px;font-variant-numeric:tabular-nums;z-index:1}
+.pocket .tick{position:absolute;top:4px;right:5px;color:var(--ok);font-weight:700;font-size:12px}
+.pocket.flash{animation:flash 1.2s ease}
+@keyframes flash{0%{box-shadow:0 0 0 0 var(--accent)}30%{box-shadow:0 0 0 4px var(--accent)}100%{box-shadow:0 0 0 0 transparent}}
+@media (max-width:480px){.grid{gap:6px}.page{padding:8px 8px 8px 20px}.pocket .nm{font-size:9.5px}}
+
+/* list view */
+.listbar{display:flex;flex-wrap:wrap;gap:8px;padding:6px 6px 12px}
+.listbar input{flex:1 1 180px;min-width:0}
+.field{background:#0f1219;border:1px solid var(--stitch);border-radius:8px;padding:8px 10px}
+.dexlist{background:var(--page);border-radius:10px;max-height:70vh;overflow:auto}
+.row{display:grid;grid-template-columns:28px 48px 40px minmax(0,1fr) auto;gap:10px;align-items:center;padding:4px 12px;border-bottom:1px solid rgba(255,255,255,.05)}
+.row img{width:40px;height:40px;image-rendering:pixelated}
+.row .n{font:600 13px var(--f-display);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.row .who{min-width:0}
+.row .who small{color:var(--ink-3);margin-left:6px}
+.row .st{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.row.have .st{color:var(--ok)}
+.row input{width:18px;height:18px;accent-color:var(--ok)}
+.row button.go{background:none;border:0;padding:0;text-align:left;color:var(--ink)}
+
+/* lookup desk */
+.desk{background:var(--leather);border:1px solid var(--stitch);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px;position:sticky;top:12px}
+@media (max-width:900px){.desk{position:static}}
+.desk h2{font:700 17px var(--f-display);margin:0}
+.desk .hint{font-size:12.5px;color:var(--ink-2);margin:0}
+.search{display:flex;gap:6px}
+.search input{flex:1;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chips button{background:#0f1219;border:1px dashed var(--stitch);border-radius:6px;padding:2px 8px;font:500 12px var(--f-display);color:var(--ink-2)}
+.status{font-size:13px;color:var(--ink-2);min-height:1em}
+.status.err{color:var(--red)}
+.results{display:flex;flex-direction:column;gap:10px;max-height:65vh;overflow:auto}
+.res{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;background:var(--page);border-radius:10px;padding:8px}
+.res img{width:96px;border-radius:5px;display:block}
+.res h3{margin:0;font-size:14.5px}
+.res .meta{font-size:12px;color:var(--ink-3)}
+.prices{display:flex;flex-direction:column;gap:2px;margin:6px 0;font-size:12.5px;font-variant-numeric:tabular-nums}
+.prices div{display:flex;justify-content:space-between;gap:8px}
+.prices b{color:var(--accent)}
+.links{display:flex;flex-wrap:wrap;gap:4px;font-size:12px}
+.links a{border:1px solid var(--stitch);border-radius:5px;padding:1px 6px;text-decoration:none}
+.res .act{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+.res .act .btn{padding:4px 10px;font-size:13px}
+.flag{display:inline-block;font:700 10px/1 var(--f-display);padding:3px 5px;border-radius:4px;vertical-align:2px;background:#0f1219;border:1px solid var(--stitch);color:var(--ink-2)}
+.flag.jp{border-color:var(--red);color:var(--red)}
+.grp{font:600 12px var(--f-display);color:var(--ink-3);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
+details.set{font-size:13px;color:var(--ink-2)}
+details.set summary{cursor:pointer}
+details.set .rowf{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+details.set .rowf>div{display:flex;gap:6px;flex-wrap:wrap}
+
+/* dialog */
+dialog{background:var(--leather-2);color:var(--ink);border:1px solid var(--stitch);border-radius:14px;padding:16px;width:min(560px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+.dlg{display:grid;grid-template-columns:180px minmax(0,1fr);gap:14px}
+@media (max-width:520px){.dlg{grid-template-columns:minmax(0,1fr)}}
+.dlg img.big{width:100%;border-radius:8px}
+.dlg h3{margin:0;font:700 20px var(--f-display)}
+.dlg .ko{color:var(--ink-2);font-size:14px}
+.dlg .act{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--accent);color:var(--accent-ink);
+  font-weight:700;padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:5;max-width:calc(100vw - 32px)}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>POKÉDEX <span>BINDER</span></h1>
+      <p>1025 ô · binder 4×4 · 16 thẻ mỗi trang · lưu trên máy này</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><small>Đã có</small><b id="sOwned">0 / 1025</b><div class="bar"><i id="sBar"></i></div></div>
+      <div class="stat"><small>Tổng giá collection</small><b id="sValue">$0.00</b><small id="sValueNote"></small></div>
+    </div>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tabBinder" aria-selected="true">Binder</button>
+    <button class="tab" role="tab" id="tabList" aria-selected="false">Check Pokédex (1025)</button>
+  </div>
+
+  <div class="main">
+    <section>
+      <div class="binder" id="viewBinder">
+        <div class="bnav">
+          <span class="pg" id="pgLabel">Trang 1 / 65</span>
+          <button class="btn" id="prev" aria-label="Trang trước">◀</button>
+          <select class="btn" id="pgSelect" aria-label="Chọn trang"></select>
+          <button class="btn" id="next" aria-label="Trang sau">▶</button>
+        </div>
+        <div class="gens" id="gens"></div>
+        <div class="page"><div class="grid" id="grid"></div></div>
+      </div>
+
+      <div class="binder" id="viewList" hidden>
+        <div class="listbar">
+          <input class="field" id="listQ" placeholder="Tìm tên / số (vd: pikachu, 25, 피카츄)">
+          <select class="field" id="listF">
+            <option value="all">Tất cả</option>
+            <option value="have">Đã có</option>
+            <option value="miss">Còn thiếu</option>
+          </select>
+        </div>
+        <div class="dexlist" id="dexlist"></div>
+      </div>
+    </section>
+
+    <aside class="desk">
+      <h2>Tra giá thẻ</h2>
+      <p class="hint">Nhập mã thẻ → hiện giá + hình, tìm cả thẻ Nhật lẫn thẻ Anh. Bấm <b>Cho vào binder</b> là thẻ vào đúng ô theo số Pokédex.</p>
+      <form class="search" id="sForm">
+        <input class="field" id="sInput" placeholder="vd: 068/064, SV7a 068, sv3pt5-25, bruxish" autocomplete="off">
+        <button class="btn primary" type="submit">Tìm</button>
+      </form>
+      <div class="chips" id="chips">
+        <button type="button">sv3pt5-25</button>
+        <button type="button">base1-4</button>
+        <button type="button">MEW 6</button>
+        <button type="button">068/064</button>
+        <button type="button">SV7a 068</button>
+        <button type="button">umbreon</button>
+      </div>
+      <div class="status" id="status"></div>
+      <div class="results" id="results"></div>
+      <details class="set">
+        <summary>Cài đặt & sao lưu</summary>
+        <div class="rowf">
+          <label for="apiKey">API key pokemontcg.io (không bắt buộc, giúp tra nhanh hơn)</label>
+          <input class="field" id="apiKey" placeholder="dán key vào đây">
+          <label for="krw">Tỷ giá KRW / USD (tự nhập, để 0 nếu không cần)</label>
+          <input class="field" id="krw" type="number" min="0" step="1">
+          <div>
+            <button class="btn" type="button" id="refresh">Cập nhật giá cả collection</button>
+            <button class="btn" type="button" id="exportB">Xuất file sao lưu</button>
+            <label class="btn" for="importF">Nhập file</label>
+            <input type="file" id="importF" accept=".json" hidden>
+          </div>
+        </div>
+      </details>
+    </aside>
+  </div>
+</div>
+
+<dialog id="dlg"><div id="dlgBody"></div></dialog>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const NAMES_EN=["Bulbasaur","Ivysaur","Venusaur","Charmander","Charmeleon","Charizard","Squirtle","Wartortle","Blastoise","Caterpie","Metapod","Butterfree","Weedle","Kakuna","Beedrill","Pidgey","Pidgeotto","Pidgeot","Rattata","Raticate","Spearow","Fearow","Ekans","Arbok","Pikachu","Raichu","Sandshrew","Sandslash","Nidoran♀","Nidorina","Nidoqueen","Nidoran♂","Nidorino","Nidoking","Clefairy","Clefable","Vulpix","Ninetales","Jigglypuff","Wigglytuff","Zubat","Golbat","Oddish","Gloom","Vileplume","Paras","Parasect","Venonat","Venomoth","Diglett","Dugtrio","Meowth","Persian","Psyduck","Golduck","Mankey","Primeape","Growlithe","Arcanine","Poliwag","Poliwhirl","Poliwrath","Abra","Kadabra","Alakazam","Machop","Machoke","Machamp","Bellsprout","Weepinbell","Victreebel","Tentacool","Tentacruel","Geodude","Graveler","Golem","Ponyta","Rapidash","Slowpoke","Slowbro","Magnemite","Magneton","Farfetch'd","Doduo","Dodrio","Seel","Dewgong","Grimer","Muk","Shellder","Cloyster","Gastly","Haunter","Gengar","Onix","Drowzee","Hypno","Krabby","Kingler","Voltorb","Electrode","Exeggcute","Exeggutor","Cubone","Marowak","Hitmonlee","Hitmonchan","Lickitung","Koffing","Weezing","Rhyhorn","Rhydon","Chansey","Tangela","Kangaskhan","Horsea","Seadra","Goldeen","Seaking","Staryu","Starmie","Mr. Mime","Scyther","Jynx","Electabuzz","Magmar","Pinsir","Tauros","Magikarp","Gyarados","Lapras","Ditto","Eevee","Vaporeon","Jolteon","Flareon","Porygon","Omanyte","Omastar","Kabuto","Kabutops","Aerodactyl","Snorlax","Articuno","Zapdos","Moltres","Dratini","Dragonair","Dragonite","Mewtwo","Mew","Chikorita","Bayleef","Meganium","Cyndaquil","Quilava","Typhlosion","Totodile","Croconaw","Feraligatr","Sentret","Furret","Hoothoot","Noctowl","Ledyba","Ledian","Spinarak","Ariados","Crobat","Chinchou","Lanturn","Pichu","Cleffa","Igglybuff","Togepi","Togetic","Natu","Xatu","Mareep","Flaaffy","Ampharos","Bellossom","Marill","Azumarill","Sudowoodo","Politoed","Hoppip","Skiploom","Jumpluff","Aipom","Sunkern","Sunflora","Yanma","Wooper","Quagsire","Espeon","Umbreon","Murkrow","Slowking","Misdreavus","Unown","Wobbuffet","Girafarig","Pineco","Forretress","Dunsparce","Gligar","Steelix","Snubbull","Granbull","Qwilfish","Scizor","Shuckle","Heracross","Sneasel","Teddiursa","Ursaring","Slugma","Magcargo","Swinub","Piloswine","Corsola","Remoraid","Octillery","Delibird","Mantine","Skarmory","Houndour","Houndoom","Kingdra","Phanpy","Donphan","Porygon2","Stantler","Smeargle","Tyrogue","Hitmontop","Smoochum","Elekid","Magby","Miltank","Blissey","Raikou","Entei","Suicune","Larvitar","Pupitar","Tyranitar","Lugia","Ho-Oh","Celebi","Treecko","Grovyle","Sceptile","Torchic","Combusken","Blaziken","Mudkip","Marshtomp","Swampert","Poochyena","Mightyena","Zigzagoon","Linoone","Wurmple","Silcoon","Beautifly","Cascoon","Dustox","Lotad","Lombre","Ludicolo","Seedot","Nuzleaf","Shiftry","Taillow","Swellow","Wingull","Pelipper","Ralts","Kirlia","Gardevoir","Surskit","Masquerain","Shroomish","Breloom","Slakoth","Vigoroth","Slaking","Nincada","Ninjask","Shedinja","Whismur","Loudred","Exploud","Makuhita","Hariyama","Azurill","Nosepass","Skitty","Delcatty","Sableye","Mawile","Aron","Lairon","Aggron","Meditite","Medicham","Electrike","Manectric","Plusle","Minun","Volbeat","Illumise","Roselia","Gulpin","Swalot","Carvanha","Sharpedo","Wailmer","Wailord","Numel","Camerupt","Torkoal","Spoink","Grumpig","Spinda","Trapinch","Vibrava","Flygon","Cacnea","Cacturne","Swablu","Altaria","Zangoose","Seviper","Lunatone","Solrock","Barboach","Whiscash","Corphish","Crawdaunt","Baltoy","Claydol","Lileep","Cradily","Anorith","Armaldo","Feebas","Milotic","Castform","Kecleon","Shuppet","Banette","Duskull","Dusclops","Tropius","Chimecho","Absol","Wynaut","Snorunt","Glalie","Spheal","Sealeo","Walrein","Clamperl","Huntail","Gorebyss","Relicanth","Luvdisc","Bagon","Shelgon","Salamence","Beldum","Metang","Metagross","Regirock","Regice","Registeel","Latias","Latios","Kyogre","Groudon","Rayquaza","Jirachi","Deoxys","Turtwig","Grotle","Torterra","Chimchar","Monferno","Infernape","Piplup","Prinplup","Empoleon","Starly","Staravia","Staraptor","Bidoof","Bibarel","Kricketot","Kricketune","Shinx","Luxio","Luxray","Budew","Roserade","Cranidos","Rampardos","Shieldon","Bastiodon","Burmy","Wormadam","Mothim","Combee","Vespiquen","Pachirisu","Buizel","Floatzel","Cherubi","Cherrim","Shellos","Gastrodon","Ambipom","Drifloon","Drifblim","Buneary","Lopunny","Mismagius","Honchkrow","Glameow","Purugly","Chingling","Stunky","Skuntank","Bronzor","Bronzong","Bonsly","Mime Jr.","Happiny","Chatot","Spiritomb","Gible","Gabite","Garchomp","Munchlax","Riolu","Lucario","Hippopotas","Hippowdon","Skorupi","Drapion","Croagunk","Toxicroak","Carnivine","Finneon","Lumineon","Mantyke","Snover","Abomasnow","Weavile","Magnezone","Lickilicky","Rhyperior","Tangrowth","Electivire","Magmortar","Togekiss","Yanmega","Leafeon","Glaceon","Gliscor","Mamoswine","Porygon-Z","Gallade","Probopass","Dusknoir","Froslass","Rotom","Uxie","Mesprit","Azelf","Dialga","Palkia","Heatran","Regigigas","Giratina","Cresselia","Phione","Manaphy","Darkrai","Shaymin","Arceus","Victini","Snivy","Servine","Serperior","Tepig","Pignite","Emboar","Oshawott","Dewott","Samurott","Patrat","Watchog","Lillipup","Herdier","Stoutland","Purrloin","Liepard","Pansage","Simisage","Pansear","Simisear","Panpour","Simipour","Munna","Musharna","Pidove","Tranquill","Unfezant","Blitzle","Zebstrika","Roggenrola","Boldore","Gigalith","Woobat","Swoobat","Drilbur","Excadrill","Audino","Timburr","Gurdurr","Conkeldurr","Tympole","Palpitoad","Seismitoad","Throh","Sawk","Sewaddle","Swadloon","Leavanny","Venipede","Whirlipede","Scolipede","Cottonee","Whimsicott","Petilil","Lilligant","Basculin","Sandile","Krokorok","Krookodile","Darumaka","Darmanitan","Maractus","Dwebble","Crustle","Scraggy","Scrafty","Sigilyph","Yamask","Cofagrigus","Tirtouga","Carracosta","Archen","Archeops","Trubbish","Garbodor","Zorua","Zoroark","Minccino","Cinccino","Gothita","Gothorita","Gothitelle","Solosis","Duosion","Reuniclus","Ducklett","Swanna","Vanillite","Vanillish","Vanilluxe","Deerling","Sawsbuck","Emolga","Karrablast","Escavalier","Foongus","Amoonguss","Frillish","Jellicent","Alomomola","Joltik","Galvantula","Ferroseed","Ferrothorn","Klink","Klang","Klinklang","Tynamo","Eelektrik","Eelektross","Elgyem","Beheeyem","Litwick","Lampent","Chandelure","Axew","Fraxure","Haxorus","Cubchoo","Beartic","Cryogonal","Shelmet","Accelgor","Stunfisk","Mienfoo","Mienshao","Druddigon","Golett","Golurk","Pawniard","Bisharp","Bouffalant","Rufflet","Braviary","Vullaby","Mandibuzz","Heatmor","Durant","Deino","Zweilous","Hydreigon","Larvesta","Volcarona","Cobalion","Terrakion","Virizion","Tornadus","Thundurus","Reshiram","Zekrom","Landorus","Kyurem","Keldeo","Meloetta","Genesect","Chespin","Quilladin","Chesnaught","Fennekin","Braixen","Delphox","Froakie","Frogadier","Greninja","Bunnelby","Diggersby","Fletchling","Fletchinder","Talonflame","Scatterbug","Spewpa","Vivillon","Litleo","Pyroar","Flabébé","Floette","Florges","Skiddo","Gogoat","Pancham","Pangoro","Furfrou","Espurr","Meowstic","Honedge","Doublade","Aegislash","Spritzee","Aromatisse","Swirlix","Slurpuff","Inkay","Malamar","Binacle","Barbaracle","Skrelp","Dragalge","Clauncher","Clawitzer","Helioptile","Heliolisk","Tyrunt","Tyrantrum","Amaura","Aurorus","Sylveon","Hawlucha","Dedenne","Carbink","Goomy","Sliggoo","Goodra","Klefki","Phantump","Trevenant","Pumpkaboo","Gourgeist","Bergmite","Avalugg","Noibat","Noivern","Xerneas","Yveltal","Zygarde","Diancie","Hoopa","Volcanion","Rowlet","Dartrix","Decidueye","Litten","Torracat","Incineroar","Popplio","Brionne","Primarina","Pikipek","Trumbeak","Toucannon","Yungoos","Gumshoos","Grubbin","Charjabug","Vikavolt","Crabrawler","Crabominable","Oricorio","Cutiefly","Ribombee","Rockruff","Lycanroc","Wishiwashi","Mareanie","Toxapex","Mudbray","Mudsdale","Dewpider","Araquanid","Fomantis","Lurantis","Morelull","Shiinotic","Salandit","Salazzle","Stufful","Bewear","Bounsweet","Steenee","Tsareena","Comfey","Oranguru","Passimian","Wimpod","Golisopod","Sandygast","Palossand","Pyukumuku","Type: Null","Silvally","Minior","Komala","Turtonator","Togedemaru","Mimikyu","Bruxish","Drampa","Dhelmise","Jangmo-o","Hakamo-o","Kommo-o","Tapu Koko","Tapu Lele","Tapu Bulu","Tapu Fini","Cosmog","Cosmoem","Solgaleo","Lunala","Nihilego","Buzzwole","Pheromosa","Xurkitree","Celesteela","Kartana","Guzzlord","Necrozma","Magearna","Marshadow","Poipole","Naganadel","Stakataka","Blacephalon","Zeraora","Meltan","Melmetal","Grookey","Thwackey","Rillaboom","Scorbunny","Raboot","Cinderace","Sobble","Drizzile","Inteleon","Skwovet","Greedent","Rookidee","Corvisquire","Corviknight","Blipbug","Dottler","Orbeetle","Nickit","Thievul","Gossifleur","Eldegoss","Wooloo","Dubwool","Chewtle","Drednaw","Yamper","Boltund","Rolycoly","Carkol","Coalossal","Applin","Flapple","Appletun","Silicobra","Sandaconda","Cramorant","Arrokuda","Barraskewda","Toxel","Toxtricity","Sizzlipede","Centiskorch","Clobbopus","Grapploct","Sinistea","Polteageist","Hatenna","Hattrem","Hatterene","Impidimp","Morgrem","Grimmsnarl","Obstagoon","Perrserker","Cursola","Sirfetch'd","Mr. Rime","Runerigus","Milcery","Alcremie","Falinks","Pincurchin","Snom","Frosmoth","Stonjourner","Eiscue","Indeedee","Morpeko","Cufant","Copperajah","Dracozolt","Arctozolt","Dracovish","Arctovish","Duraludon","Dreepy","Drakloak","Dragapult","Zacian","Zamazenta","Eternatus","Kubfu","Urshifu","Zarude","Regieleki","Regidrago","Glastrier","Spectrier","Calyrex","Wyrdeer","Kleavor","Ursaluna","Basculegion","Sneasler","Overqwil","Enamorus","Sprigatito","Floragato","Meowscarada","Fuecoco","Crocalor","Skeledirge","Quaxly","Quaxwell","Quaquaval","Lechonk","Oinkologne","Tarountula","Spidops","Nymble","Lokix","Pawmi","Pawmo","Pawmot","Tandemaus","Maushold","Fidough","Dachsbun","Smoliv","Dolliv","Arboliva","Squawkabilly","Nacli","Naclstack","Garganacl","Charcadet","Armarouge","Ceruledge","Tadbulb","Bellibolt","Wattrel","Kilowattrel","Maschiff","Mabosstiff","Shroodle","Grafaiai","Bramblin","Brambleghast","Toedscool","Toedscruel","Klawf","Capsakid","Scovillain","Rellor","Rabsca","Flittle","Espathra","Tinkatink","Tinkatuff","Tinkaton","Wiglett","Wugtrio","Bombirdier","Finizen","Palafin","Varoom","Revavroom","Cyclizar","Orthworm","Glimmet","Glimmora","Greavard","Houndstone","Flamigo","Cetoddle","Cetitan","Veluza","Dondozo","Tatsugiri","Annihilape","Clodsire","Farigiraf","Dudunsparce","Kingambit","Great Tusk","Scream Tail","Brute Bonnet","Flutter Mane","Slither Wing","Sandy Shocks","Iron Treads","Iron Bundle","Iron Hands","Iron Jugulis","Iron Moth","Iron Thorns","Frigibax","Arctibax","Baxcalibur","Gimmighoul","Gholdengo","Wo-Chien","Chien-Pao","Ting-Lu","Chi-Yu","Roaring Moon","Iron Valiant","Koraidon","Miraidon","Walking Wake","Iron Leaves","Dipplin","Poltchageist","Sinistcha","Okidogi","Munkidori","Fezandipiti","Ogerpon","Archaludon","Hydrapple","Gouging Fire","Raging Bolt","Iron Boulder","Iron Crown","Terapagos","Pecharunt"];
+const NAMES_KO=["이상해씨","이상해풀","이상해꽃","파이리","리자드","리자몽","꼬부기","어니부기","거북왕","캐터피","단데기","버터플","뿔충이","딱충이","독침붕","구구","피죤","피죤투","꼬렛","레트라","깨비참","깨비드릴조","아보","아보크","피카츄","라이츄","모래두지","고지","니드런♀","니드리나","니드퀸","니드런♂","니드리노","니드킹","삐삐","픽시","식스테일","나인테일","푸린","푸크린","주뱃","골뱃","뚜벅쵸","냄새꼬","라플레시아","파라스","파라섹트","콘팡","도나리","디그다","닥트리오","나옹","페르시온","고라파덕","골덕","망키","성원숭","가디","윈디","발챙이","슈륙챙이","강챙이","캐이시","윤겔라","후딘","알통몬","근육몬","괴력몬","모다피","우츠동","우츠보트","왕눈해","독파리","꼬마돌","데구리","딱구리","포니타","날쌩마","야돈","야도란","코일","레어코일","파오리","두두","두트리오","쥬쥬","쥬레곤","질퍽이","질뻐기","셀러","파르셀","고오스","고우스트","팬텀","롱스톤","슬리프","슬리퍼","크랩","킹크랩","찌리리공","붐볼","아라리","나시","탕구리","텅구리","시라소몬","홍수몬","내루미","또가스","또도가스","뿔카노","코뿌리","럭키","덩쿠리","캥카","쏘드라","시드라","콘치","왕콘치","별가사리","아쿠스타","마임맨","스라크","루주라","에레브","마그마","쁘사이저","켄타로스","잉어킹","갸라도스","라프라스","메타몽","이브이","샤미드","쥬피썬더","부스터","폴리곤","암나이트","암스타","투구","투구푸스","프테라","잠만보","프리져","썬더","파이어","미뇽","신뇽","망나뇽","뮤츠","뮤","치코리타","베이리프","메가니움","브케인","마그케인","블레이범","리아코","엘리게이","장크로다일","꼬리선","다꼬리","부우부","야부엉","레디바","레디안","페이검","아리아도스","크로뱃","초라기","랜턴","피츄","삐","푸푸린","토게피","토게틱","네이티","네이티오","메리프","보송송","전룡","아르코","마릴","마릴리","꼬지모","왕구리","통통코","두코","솜솜코","에이팜","해너츠","해루미","왕자리","우파","누오","에브이","블래키","니로우","야도킹","무우마","안농","마자용","키링키","피콘","쏘콘","노고치","글라이거","강철톤","블루","그랑블루","침바루","핫삼","단단지","헤라크로스","포푸니","깜지곰","링곰","마그마그","마그카르고","꾸꾸리","메꾸리","코산호","총어","대포무노","딜리버드","만타인","무장조","델빌","헬가","킹드라","코코리","코리갑","폴리곤2","노라키","루브도","배루키","카포에라","뽀뽀라","에레키드","마그비","밀탱크","해피너스","라이코","앤테이","스이쿤","애버라스","데기라스","마기라스","루기아","칠색조","세레비","나무지기","나무돌이","나무킹","아차모","영치코","번치코","물짱이","늪짱이","대짱이","포챠나","그라에나","지그제구리","직구리","개무소","실쿤","뷰티플라이","카스쿤","독케일","연꽃몬","로토스","로파파","도토링","잎새코","다탱구","테일로","스왈로","갈모매","패리퍼","랄토스","킬리아","가디안","비구술","비나방","버섯꼬","버섯모","게을로","발바로","게을킹","토중몬","아이스크","껍질몬","소곤룡","노공룡","폭음룡","마크탕","하리뭉","루리리","코코파스","에나비","델케티","깜까미","입치트","가보리","갱도라","보스로라","요가랑","요가램","썬더라이","썬더볼트","플러시","마이농","볼비트","네오비트","로젤리아","꼴깍몬","꿀꺽몬","샤프니아","샤크니아","고래왕자","고래왕","둔타","폭타","코터스","피그점프","피그킹","얼루기","톱치","비브라바","플라이곤","선인왕","밤선인","파비코","파비코리","쟝고","세비퍼","루나톤","솔록","미꾸리","메깅","가재군","가재장군","오뚝군","점토도리","릴링","릴리요","아노딥스","아말도","빈티나","밀로틱","캐스퐁","켈리몬","어둠대신","다크펫","해골몽","미라몽","트로피우스","치렁","앱솔","마자","눈꼬마","얼음귀신","대굴레오","씨레오","씨카이저","진주몽","헌테일","분홍장이","시라칸","사랑동이","아공이","쉘곤","보만다","메탕","메탕구","메타그로스","레지락","레지아이스","레지스틸","라티아스","라티오스","가이오가","그란돈","레쿠쟈","지라치","테오키스","모부기","수풀부기","토대부기","불꽃숭이","파이숭이","초염몽","팽도리","팽태자","엠페르트","찌르꼬","찌르버드","찌르호크","비버니","비버통","귀뚤뚜기","귀뚤톡크","꼬링크","럭시오","렌트라","꼬몽울","로즈레이드","두개도스","램펄드","방패톱스","바리톱스","도롱충이","도롱마담","나메일","세꿀버리","비퀸","파치리스","브이젤","플로젤","체리버","체리꼬","깝질무","트리토돈","겟핸보숭","흔들풍손","둥실라이드","이어롤","이어롭","무우마직","돈크로우","나옹마","몬냥이","랑딸랑","스컹뿡","스컹탱크","동미러","동탁군","꼬지지","흉내내","핑복","페라페","화강돌","딥상어동","한바이트","한카리아스","먹고자","리오르","루카리오","히포포타스","하마돈","스콜피","드래피온","삐딱구리","독개굴","무스틈니","형광어","네오라이트","타만타","눈쓰개","눈설왕","포푸니라","자포코일","내룸벨트","거대코뿌리","덩쿠림보","에레키블","마그마번","토게키스","메가자리","리피아","글레이시아","글라이온","맘모꾸리","폴리곤Z","엘레이드","대코파스","야느와르몽","눈여아","로토무","유크시","엠라이트","아그놈","디아루가","펄기아","히드런","레지기가스","기라티나","크레세리아","피오네","마나피","다크라이","쉐이미","아르세우스","비크티니","주리비얀","샤비","샤로다","뚜꾸리","차오꿀","염무왕","수댕이","쌍검자비","대검귀","보르쥐","보르그","요테리","하데리어","바랜드","쌔비냥","레파르다스","야나프","야나키","바오프","바오키","앗차프","앗차키","몽나","몽얌나","콩둘기","유토브","켄호로우","줄뮤마","제브라이카","단굴","암트르","기가이어스","또르박쥐","맘박쥐","두더류","몰드류","다부니","으랏차","토쇠골","노보청","동챙이","두까비","두빅굴","던지미","타격귀","두르보","두르쿤","모아머","마디네","휠구","펜드라","소미안","엘풍","치릴리","드레디어","배쓰나이","깜눈크","악비르","악비아르","달막화","불비달마","마라카치","돌살이","암팰리스","곤율랭","곤율거니","심보러","데스마스","데스니칸","프로토가","늑골라","아켄","아케오스","깨봉이","더스트나","조로아","조로아크","치라미","치라치노","고디탱","고디보미","고디모아젤","유니란","듀란","란쿨루스","꼬지보리","스완나","바닐프티","바닐리치","배바닐라","사철록","바라철록","에몽가","딱정곤","슈바르고","깜놀버슬","뽀록나","탱그릴","탱탱겔","맘복치","파쪼옥","전툴라","철시드","너트령","기어르","기기어르","기기기어르","저리어","저리릴","저리더프","리그레","벰크","불켜미","램프라","샹델라","터검니","액슨도","액스라이즈","코고미","툰베어","프리지오","쪼마리","어지리더","메더","비조푸","비조도","크리만","골비람","골루그","자망칼","절각참","버프론","수리둥보","워글","벌차이","버랜지나","앤티골","아이앤트","모노두","디헤드","삼삼드래","활화르바","불카모스","코바르온","테라키온","비리디온","토네로스","볼트로스","레시라무","제크로무","랜드로스","큐레무","케르디오","메로엣타","게노세크트","도치마론","도치보구","브리가론","푸호꼬","테르나","마폭시","개구마르","개굴반장","개굴닌자","파르빗","파르토","화살꼬빈","불화살빈","파이어로","분이벌레","분떠도리","비비용","레오꼬","화염레오","플라베베","플라엣테","플라제스","메이클","고고트","판짱","부란다","트리미앙","냐스퍼","냐오닉스","단칼빙","쌍검킬","킬가르도","슈쁘","프레프티르","나룸퍼프","나루림","오케이징","칼라마네로","거북손손","거북손데스","수레기","드래캄","완철포","블로스터","목도리키텔","일레도리자드","티고라스","견고라스","아마루스","아마루르가","님피아","루차불","데덴네","멜리시","미끄메라","미끄네일","미끄래곤","클레피","나목령","대로트","호바귀","펌킨인","꽁어름","크레베이스","음뱃","음번","제르네아스","이벨타르","지가르데","디안시","후파","볼케니온","나몰빼미","빼미스로우","모크나이퍼","냐오불","냐오히트","어흥염","누리공","키요공","누리레느","콕코구리","크라파","왕큰부리","영구스","형사구스","턱지충이","전지충이","투구뿌논","오기지게","모단단게","춤추새","에블리","에리본","암멍이","루가루암","약어리","시마사리","더시마사리","머드나기","만마드","물거미","깨비물거미","짜랑랑","라란티스","자마슈","마셰이드","야도뇽","염뉴트","포곰곰","이븐곰","달콤아","달무리나","달코퀸","큐아링","하랑우탄","내던숭이","꼬시레","갑주무사","모래꿍","모래성이당","해무기","타입:널","실버디","메테노","자말라","폭거북스","토게데마루","따라큐","치갈기","할비롱","타타륜","짜랑꼬","짜랑고우","짜랑고우거","카푸꼬꼬꼭","카푸나비나","카푸브루루","카푸느지느","코스모그","코스모움","솔가레오","루나아라","텅비드","매시붕","페로코체","전수목","철화구야","종이신도","악식킹","네크로즈마","마기아나","마샤도","베베놈","아고용","차곡차곡","두파팡","제라오라","멜탄","멜메탈","흥나숭","채키몽","고릴타","염버니","래비풋","에이스번","울머기","누겔레온","인텔리레온","탐리스","요씽리스","파라꼬","파크로우","아머까오","두루지벌레","레돔벌레","이올브","훔처우","폭슬라이","꼬모카","백솜모카","우르","배우르","깨물부기","갈가부기","멍파치","펄스멍","탄동","탄차곤","석탄산","과사삭벌레","애프룡","단지래플","모래뱀","사다이사","윽우지","찌로꼬치","꼬치조","일레즌","스트린더","태우지네","다태우지네","때때무노","케오퍼스","데인차","포트데스","몸지브림","손지브림","브리무음","메롱꿍","쏘겨모","오롱털","가로막구리","나이킹","산호르곤","창파나이트","마임꽁꽁","데스판","마빌크","마휘핑","대여르","찌르성게","누니머기","모스노우","돌헨진","빙큐보","에써르","모르페코","끼리동","대왕끼리동","파치래곤","파치르돈","어래곤","어치르돈","두랄루돈","드라꼰","드래런치","드래펄트","자시안","자마젠타","무한다이노","치고마","우라오스","자루도","레지에레키","레지드래고","블리자포스","레이스포스","버드렉스","신비록","사마자르","다투곰","대쓰여너","포푸니크","장침바루","러브로스","나오하","나로테","마스카나","뜨아거","악뜨거","라우드본","꾸왁스","아꾸왁","웨이니발","맛보돈","퍼퓨돈","타랜툴라","트래피더","콩알뚜기","엑스레그","빠모","빠모트","빠르모트","두리쥐","파밀리쥐","쫀도기","바우첼","미니브","올리뇨","올리르바","시비꼬","베베솔트","스태솔트","콜로솔트","카르본","카디나르마","파라블레이즈","빈나두","찌리배리","찌리비","찌리비크","오라티프","마피티프","땃쭈르","태깅구르","그푸리","공푸리","들눈해","육파리","절벼게","캡싸이","스코빌런","구르데","베라카스","하느라기","클레스퍼트라","어리짱","벼리짱","두드리짱","바다그다","바닥트리오","떨구새","맨돌핀","돌핀맨","부르롱","부르르룸","모토마","꿈트렁","초롱순","킬라플로르","망망이","묘두기","꼬이밍고","터벅고래","우락고래","가비루사","어써러셔","싸리용","저승갓숭","토오","키키링","노고고치","대도각참","위대한엄니","우렁찬꼬리","사나운버섯","날개치는머리","땅을기는날개","모래털가죽","무쇠바퀴","무쇠보따리","무쇠손","무쇠머리","무쇠독나방","무쇠가시","드니차","드니꽁","드닐레이브","모으령","타부자고","총지엔","파오젠","딩루","위유이","고동치는달","무쇠무인","코라이돈","미라이돈","굽이치는물결","무쇠잎새","과미르","차데스","그우린차","조타구","이야후","기로치","오거폰","브리두라스","과미드라","꿰뚫는화염","날뛰는우레","무쇠암석","무쇠감투","테라파고스","복숭악동"];
+const NAMES_JA=["フシギダネ", "フシギソウ", "フシギバナ", "ヒトカゲ", "リザード", "リザードン", "ゼニガメ", "カメール", "カメックス", "キャタピー", "トランセル", "バタフリー", "ビードル", "コクーン", "スピアー", "ポッポ", "ピジョン", "ピジョット", "コラッタ", "ラッタ", "オニスズメ", "オニドリル", "アーボ", "アーボック", "ピカチュウ", "ライチュウ", "サンド", "サンドパン", "ニドラン♀", "ニドリーナ", "ニドクイン", "ニドラン♂", "ニドリーノ", "ニドキング", "ピッピ", "ピクシー", "ロコン", "キュウコン", "プリン", "プクリン", "ズバット", "ゴルバット", "ナゾノクサ", "クサイハナ", "ラフレシア", "パラス", "パラセクト", "コンパン", "モルフォン", "ディグダ", "ダグトリオ", "ニャース", "ペルシアン", "コダック", "ゴルダック", "マンキー", "オコリザル", "ガーディ", "ウインディ", "ニョロモ", "ニョロゾ", "ニョロボン", "ケーシィ", "ユンゲラー", "フーディン", "ワンリキー", "ゴーリキー", "カイリキー", "マダツボミ", "ウツドン", "ウツボット", "メノクラゲ", "ドククラゲ", "イシツブテ", "ゴローン", "ゴローニャ", "ポニータ", "ギャロップ", "ヤドン", "ヤドラン", "コイル", "レアコイル", "カモネギ", "ドードー", "ドードリオ", "パウワウ", "ジュゴン", "ベトベター", "ベトベトン", "シェルダー", "パルシェン", "ゴース", "ゴースト", "ゲンガー", "イワーク", "スリープ", "スリーパー", "クラブ", "キングラー", "ビリリダマ", "マルマイン", "タマタマ", "ナッシー", "カラカラ", "ガラガラ", "サワムラー", "エビワラー", "ベロリンガ", "ドガース", "マタドガス", "サイホーン", "サイドン", "ラッキー", "モンジャラ", "ガルーラ", "タッツー", "シードラ", "トサキント", "アズマオウ", "ヒトデマン", "スターミー", "バリヤード", "ストライク", "ルージュラ", "エレブー", "ブーバー", "カイロス", "ケンタロス", "コイキング", "ギャラドス", "ラプラス", "メタモン", "イーブイ", "シャワーズ", "サンダース", "ブースター", "ポリゴン", "オムナイト", "オムスター", "カブト", "カブトプス", "プテラ", "カビゴン", "フリーザー", "サンダー", "ファイヤー", "ミニリュウ", "ハクリュー", "カイリュー", "ミュウツー", "ミュウ", "チコリータ", "ベイリーフ", "メガニウム", "ヒノアラシ", "マグマラシ", "バクフーン", "ワニノコ", "アリゲイツ", "オーダイル", "オタチ", "オオタチ", "ホーホー", "ヨルノズク", "レディバ", "レディアン", "イトマル", "アリアドス", "クロバット", "チョンチー", "ランターン", "ピチュー", "ピィ", "ププリン", "トゲピー", "トゲチック", "ネイティ", "ネイティオ", "メリープ", "モココ", "デンリュウ", "キレイハナ", "マリル", "マリルリ", "ウソッキー", "ニョロトノ", "ハネッコ", "ポポッコ", "ワタッコ", "エイパム", "ヒマナッツ", "キマワリ", "ヤンヤンマ", "ウパー", "ヌオー", "エーフィ", "ブラッキー", "ヤミカラス", "ヤドキング", "ムウマ", "アンノーン", "ソーナンス", "キリンリキ", "クヌギダマ", "フォレトス", "ノコッチ", "グライガー", "ハガネール", "ブルー", "グランブル", "ハリーセン", "ハッサム", "ツボツボ", "ヘラクロス", "ニューラ", "ヒメグマ", "リングマ", "マグマッグ", "マグカルゴ", "ウリムー", "イノムー", "サニーゴ", "テッポウオ", "オクタン", "デリバード", "マンタイン", "エアームド", "デルビル", "ヘルガー", "キングドラ", "ゴマゾウ", "ドンファン", "ポリゴン２", "オドシシ", "ドーブル", "バルキー", "カポエラー", "ムチュール", "エレキッド", "ブビィ", "ミルタンク", "ハピナス", "ライコウ", "エンテイ", "スイクン", "ヨーギラス", "サナギラス", "バンギラス", "ルギア", "ホウオウ", "セレビィ", "キモリ", "ジュプトル", "ジュカイン", "アチャモ", "ワカシャモ", "バシャーモ", "ミズゴロウ", "ヌマクロー", "ラグラージ", "ポチエナ", "グラエナ", "ジグザグマ", "マッスグマ", "ケムッソ", "カラサリス", "アゲハント", "マユルド", "ドクケイル", "ハスボー", "ハスブレロ", "ルンパッパ", "タネボー", "コノハナ", "ダーテング", "スバメ", "オオスバメ", "キャモメ", "ペリッパー", "ラルトス", "キルリア", "サーナイト", "アメタマ", "アメモース", "キノココ", "キノガッサ", "ナマケロ", "ヤルキモノ", "ケッキング", "ツチニン", "テッカニン", "ヌケニン", "ゴニョニョ", "ドゴーム", "バクオング", "マクノシタ", "ハリテヤマ", "ルリリ", "ノズパス", "エネコ", "エネコロロ", "ヤミラミ", "クチート", "ココドラ", "コドラ", "ボスゴドラ", "アサナン", "チャーレム", "ラクライ", "ライボルト", "プラスル", "マイナン", "バルビート", "イルミーゼ", "ロゼリア", "ゴクリン", "マルノーム", "キバニア", "サメハダー", "ホエルコ", "ホエルオー", "ドンメル", "バクーダ", "コータス", "バネブー", "ブーピッグ", "パッチール", "ナックラー", "ビブラーバ", "フライゴン", "サボネア", "ノクタス", "チルット", "チルタリス", "ザングース", "ハブネーク", "ルナトーン", "ソルロック", "ドジョッチ", "ナマズン", "ヘイガニ", "シザリガー", "ヤジロン", "ネンドール", "リリーラ", "ユレイドル", "アノプス", "アーマルド", "ヒンバス", "ミロカロス", "ポワルン", "カクレオン", "カゲボウズ", "ジュペッタ", "ヨマワル", "サマヨール", "トロピウス", "チリーン", "アブソル", "ソーナノ", "ユキワラシ", "オニゴーリ", "タマザラシ", "トドグラー", "トドゼルガ", "パールル", "ハンテール", "サクラビス", "ジーランス", "ラブカス", "タツベイ", "コモルー", "ボーマンダ", "ダンバル", "メタング", "メタグロス", "レジロック", "レジアイス", "レジスチル", "ラティアス", "ラティオス", "カイオーガ", "グラードン", "レックウザ", "ジラーチ", "デオキシス", "ナエトル", "ハヤシガメ", "ドダイトス", "ヒコザル", "モウカザル", "ゴウカザル", "ポッチャマ", "ポッタイシ", "エンペルト", "ムックル", "ムクバード", "ムクホーク", "ビッパ", "ビーダル", "コロボーシ", "コロトック", "コリンク", "ルクシオ", "レントラー", "スボミー", "ロズレイド", "ズガイドス", "ラムパルド", "タテトプス", "トリデプス", "ミノムッチ", "ミノマダム", "ガーメイル", "ミツハニー", "ビークイン", "パチリス", "ブイゼル", "フローゼル", "チェリンボ", "チェリム", "カラナクシ", "トリトドン", "エテボース", "フワンテ", "フワライド", "ミミロル", "ミミロップ", "ムウマージ", "ドンカラス", "ニャルマー", "ブニャット", "リーシャン", "スカンプー", "スカタンク", "ドーミラー", "ドータクン", "ウソハチ", "マネネ", "ピンプク", "ペラップ", "ミカルゲ", "フカマル", "ガバイト", "ガブリアス", "ゴンベ", "リオル", "ルカリオ", "ヒポポタス", "カバルドン", "スコルピ", "ドラピオン", "グレッグル", "ドクロッグ", "マスキッパ", "ケイコウオ", "ネオラント", "タマンタ", "ユキカブリ", "ユキノオー", "マニューラ", "ジバコイル", "ベロベルト", "ドサイドン", "モジャンボ", "エレキブル", "ブーバーン", "トゲキッス", "メガヤンマ", "リーフィア", "グレイシア", "グライオン", "マンムー", "ポリゴンＺ", "エルレイド", "ダイノーズ", "ヨノワール", "ユキメノコ", "ロトム", "ユクシー", "エムリット", "アグノム", "ディアルガ", "パルキア", "ヒードラン", "レジギガス", "ギラティナ", "クレセリア", "フィオネ", "マナフィ", "ダークライ", "シェイミ", "アルセウス", "ビクティニ", "ツタージャ", "ジャノビー", "ジャローダ", "ポカブ", "チャオブー", "エンブオー", "ミジュマル", "フタチマル", "ダイケンキ", "ミネズミ", "ミルホッグ", "ヨーテリー", "ハーデリア", "ムーランド", "チョロネコ", "レパルダス", "ヤナップ", "ヤナッキー", "バオップ", "バオッキー", "ヒヤップ", "ヒヤッキー", "ムンナ", "ムシャーナ", "マメパト", "ハトーボー", "ケンホロウ", "シママ", "ゼブライカ", "ダンゴロ", "ガントル", "ギガイアス", "コロモリ", "ココロモリ", "モグリュー", "ドリュウズ", "タブンネ", "ドッコラー", "ドテッコツ", "ローブシン", "オタマロ", "ガマガル", "ガマゲロゲ", "ナゲキ", "ダゲキ", "クルミル", "クルマユ", "ハハコモリ", "フシデ", "ホイーガ", "ペンドラー", "モンメン", "エルフーン", "チュリネ", "ドレディア", "バスラオ", "メグロコ", "ワルビル", "ワルビアル", "ダルマッカ", "ヒヒダルマ", "マラカッチ", "イシズマイ", "イワパレス", "ズルッグ", "ズルズキン", "シンボラー", "デスマス", "デスカーン", "プロトーガ", "アバゴーラ", "アーケン", "アーケオス", "ヤブクロン", "ダストダス", "ゾロア", "ゾロアーク", "チラーミィ", "チラチーノ", "ゴチム", "ゴチミル", "ゴチルゼル", "ユニラン", "ダブラン", "ランクルス", "コアルヒー", "スワンナ", "バニプッチ", "バニリッチ", "バイバニラ", "シキジカ", "メブキジカ", "エモンガ", "カブルモ", "シュバルゴ", "タマゲタケ", "モロバレル", "プルリル", "ブルンゲル", "ママンボウ", "バチュル", "デンチュラ", "テッシード", "ナットレイ", "ギアル", "ギギアル", "ギギギアル", "シビシラス", "シビビール", "シビルドン", "リグレー", "オーベム", "ヒトモシ", "ランプラー", "シャンデラ", "キバゴ", "オノンド", "オノノクス", "クマシュン", "ツンベアー", "フリージオ", "チョボマキ", "アギルダー", "マッギョ", "コジョフー", "コジョンド", "クリムガン", "ゴビット", "ゴルーグ", "コマタナ", "キリキザン", "バッフロン", "ワシボン", "ウォーグル", "バルチャイ", "バルジーナ", "クイタラン", "アイアント", "モノズ", "ジヘッド", "サザンドラ", "メラルバ", "ウルガモス", "コバルオン", "テラキオン", "ビリジオン", "トルネロス", "ボルトロス", "レシラム", "ゼクロム", "ランドロス", "キュレム", "ケルディオ", "メロエッタ", "ゲノセクト", "ハリマロン", "ハリボーグ", "ブリガロン", "フォッコ", "テールナー", "マフォクシー", "ケロマツ", "ゲコガシラ", "ゲッコウガ", "ホルビー", "ホルード", "ヤヤコマ", "ヒノヤコマ", "ファイアロー", "コフキムシ", "コフーライ", "ビビヨン", "シシコ", "カエンジシ", "フラベベ", "フラエッテ", "フラージェス", "メェークル", "ゴーゴート", "ヤンチャム", "ゴロンダ", "トリミアン", "ニャスパー", "ニャオニクス", "ヒトツキ", "ニダンギル", "ギルガルド", "シュシュプ", "フレフワン", "ペロッパフ", "ペロリーム", "マーイーカ", "カラマネロ", "カメテテ", "ガメノデス", "クズモー", "ドラミドロ", "ウデッポウ", "ブロスター", "エリキテル", "エレザード", "チゴラス", "ガチゴラス", "アマルス", "アマルルガ", "ニンフィア", "ルチャブル", "デデンネ", "メレシー", "ヌメラ", "ヌメイル", "ヌメルゴン", "クレッフィ", "ボクレー", "オーロット", "バケッチャ", "パンプジン", "カチコール", "クレベース", "オンバット", "オンバーン", "ゼルネアス", "イベルタル", "ジガルデ", "ディアンシー", "フーパ", "ボルケニオン", "モクロー", "フクスロー", "ジュナイパー", "ニャビー", "ニャヒート", "ガオガエン", "アシマリ", "オシャマリ", "アシレーヌ", "ツツケラ", "ケララッパ", "ドデカバシ", "ヤングース", "デカグース", "アゴジムシ", "デンヂムシ", "クワガノン", "マケンカニ", "ケケンカニ", "オドリドリ", "アブリー", "アブリボン", "イワンコ", "ルガルガン", "ヨワシ", "ヒドイデ", "ドヒドイデ", "ドロバンコ", "バンバドロ", "シズクモ", "オニシズクモ", "カリキリ", "ラランテス", "ネマシュ", "マシェード", "ヤトウモリ", "エンニュート", "ヌイコグマ", "キテルグマ", "アマカジ", "アママイコ", "アマージョ", "キュワワー", "ヤレユータン", "ナゲツケサル", "コソクムシ", "グソクムシャ", "スナバァ", "シロデスナ", "ナマコブシ", "タイプ：ヌル", "シルヴァディ", "メテノ", "ネッコアラ", "バクガメス", "トゲデマル", "ミミッキュ", "ハギギシリ", "ジジーロン", "ダダリン", "ジャラコ", "ジャランゴ", "ジャラランガ", "カプ・コケコ", "カプ・テテフ", "カプ・ブルル", "カプ・レヒレ", "コスモッグ", "コスモウム", "ソルガレオ", "ルナアーラ", "ウツロイド", "マッシブーン", "フェローチェ", "デンジュモク", "テッカグヤ", "カミツルギ", "アクジキング", "ネクロズマ", "マギアナ", "マーシャドー", "ベベノム", "アーゴヨン", "ツンデツンデ", "ズガドーン", "ゼラオラ", "メルタン", "メルメタル", "サルノリ", "バチンキー", "ゴリランダー", "ヒバニー", "ラビフット", "エースバーン", "メッソン", "ジメレオン", "インテレオン", "ホシガリス", "ヨクバリス", "ココガラ", "アオガラス", "アーマーガア", "サッチムシ", "レドームシ", "イオルブ", "クスネ", "フォクスライ", "ヒメンカ", "ワタシラガ", "ウールー", "バイウールー", "カムカメ", "カジリガメ", "ワンパチ", "パルスワン", "タンドン", "トロッゴン", "セキタンザン", "カジッチュ", "アップリュー", "タルップル", "スナヘビ", "サダイジャ", "ウッウ", "サシカマス", "カマスジョー", "エレズン", "ストリンダー", "ヤクデ", "マルヤクデ", "タタッコ", "オトスパス", "ヤバチャ", "ポットデス", "ミブリム", "テブリム", "ブリムオン", "ベロバー", "ギモー", "オーロンゲ", "タチフサグマ", "ニャイキング", "サニゴーン", "ネギガナイト", "バリコオル", "デスバーン", "マホミル", "マホイップ", "タイレーツ", "バチンウニ", "ユキハミ", "モスノウ", "イシヘンジン", "コオリッポ", "イエッサン", "モルペコ", "ゾウドウ", "ダイオウドウ", "パッチラゴン", "パッチルドン", "ウオノラゴン", "ウオチルドン", "ジュラルドン", "ドラメシヤ", "ドロンチ", "ドラパルト", "ザシアン", "ザマゼンタ", "ムゲンダイナ", "ダクマ", "ウーラオス", "ザルード", "レジエレキ", "レジドラゴ", "ブリザポス", "レイスポス", "バドレックス", "アヤシシ", "バサギリ", "ガチグマ", "イダイトウ", "オオニューラ", "ハリーマン", "ラブトロス", "ニャオハ", "ニャローテ", "マスカーニャ", "ホゲータ", "アチゲータ", "ラウドボーン", "クワッス", "ウェルカモ", "ウェーニバル", "グルトン", "パフュートン", "タマンチュラ", "ワナイダー", "マメバッタ", "エクスレッグ", "パモ", "パモット", "パーモット", "ワッカネズミ", "イッカネズミ", "パピモッチ", "バウッツェル", "ミニーブ", "オリーニョ", "オリーヴァ", "イキリンコ", "コジオ", "ジオヅム", "キョジオーン", "カルボウ", "グレンアルマ", "ソウブレイズ", "ズピカ", "ハラバリー", "カイデン", "タイカイデン", "オラチフ", "マフィティフ", "シルシュルー", "タギングル", "アノクサ", "アノホラグサ", "ノノクラゲ", "リククラゲ", "ガケガニ", "カプサイジ", "スコヴィラン", "シガロコ", "ベラカス", "ヒラヒナ", "クエスパトラ", "カヌチャン", "ナカヌチャン", "デカヌチャン", "ウミディグダ", "ウミトリオ", "オトシドリ", "ナミイルカ", "イルカマン", "ブロロン", "ブロロローム", "モトトカゲ", "ミミズズ", "キラーメ", "キラフロル", "ボチ", "ハカドッグ", "カラミンゴ", "アルクジラ", "ハルクジラ", "ミガルーサ", "ヘイラッシャ", "シャリタツ", "コノヨザル", "ドオー", "リキキリン", "ノココッチ", "ドドゲザン", "イダイナキバ", "サケブシッポ", "アラブルタケ", "ハバタクカミ", "チヲハウハネ", "スナノケガワ", "テツノワダチ", "テツノツツミ", "テツノカイナ", "テツノコウベ", "テツノドクガ", "テツノイバラ", "セビエ", "セゴール", "セグレイブ", "コレクレー", "サーフゴー", "チオンジェン", "パオジアン", "ディンルー", "イーユイ", "トドロクツキ", "テツノブジン", "コライドン", "ミライドン", "ウネルミナモ", "テツノイサハ", "カミッチュ", "チャデス", "ヤバソチャ", "イイネイヌ", "マシマシラ", "キチキギス", "オーガポン", "ブリジュラス", "カミツオロチ", "ウガツホムラ", "タケルライコ", "テツノイワオ", "テツノカシラ", "テラパゴス", "モモワロウ"];
+
+const TOTAL = 1025, PER = 16, PAGES = Math.ceil(TOTAL / PER);
+const GENS = [[1,151],[152,251],[252,386],[387,493],[494,649],[650,721],[722,809],[810,905],[906,1025]];
+const API = "https://api.pokemontcg.io/v2/cards";
+const SPR = n => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${n}.png`;
+const SPR_S = n => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${n}.png`;
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(4, "0");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- state ---------- */
+const KEY = "pokedex-binder-v1";
+let S = { owned: {}, page: 0, apiKey: "", krw: 0 };
+try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(S, JSON.parse(raw)); } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+
+/* ---------- prices ---------- */
+const VARIANT_ORDER = ["holofoil","normal","reverseHolofoil","1stEditionHolofoil","1stEditionNormal","unlimitedHolofoil","1stEdition","unlimited"];
+const VARIANT_VI = { holofoil:"Holo", normal:"Thường", reverseHolofoil:"Reverse holo", "1stEditionHolofoil":"1st Ed holo", "1stEditionNormal":"1st Ed", unlimitedHolofoil:"Unlimited holo", "1stEdition":"1st Ed", unlimited:"Unlimited" };
+function bestPrice(card) {
+  const p = card.tcgplayer && card.tcgplayer.prices;
+  if (p) {
+    const keys = Object.keys(p).sort((a, b) => (VARIANT_ORDER.indexOf(a) + 99) % 99 - (VARIANT_ORDER.indexOf(b) + 99) % 99);
+    for (const k of keys) { const v = p[k].market ?? p[k].mid ?? p[k].low; if (v != null) return { usd: v, variant: k }; }
+  }
+  return { usd: null, variant: null };
+}
+const money = v => v == null ? "—" : "$" + v.toFixed(2);
+const krw = v => (v == null || !S.krw) ? "" : " · ₩" + Math.round(v * S.krw).toLocaleString("ko-KR");
+
+const VARIANT_TD = { normal:"Thường", holofoil:"Holo", "reverse-holofoil":"Reverse holo", reverse:"Reverse holo", "1st-edition":"1st Ed", "1st-edition-holofoil":"1st Ed holo", unlimited:"Unlimited", "unlimited-holofoil":"Unlimited holo" };
+const TD_ORDER = ["holofoil","normal","reverse-holofoil","reverse","1st-edition-holofoil","1st-edition","unlimited-holofoil","unlimited"];
+
+/* English card from pokemontcg.io -> common shape */
+function normEN(card) {
+  const bp = bestPrice(card), rows = [];
+  for (const [k, v] of Object.entries(card.tcgplayer?.prices || {})) {
+    const val = v.market ?? v.mid ?? v.low;
+    if (val != null) rows.push(["TCGplayer · " + (VARIANT_VI[k] || k), money(val), true]);
+  }
+  const cm = card.cardmarket?.prices, eur = cm ? (cm.trendPrice ?? cm.averageSellPrice ?? null) : null;
+  if (eur != null) rows.push(["Cardmarket trend", "€" + eur.toFixed(2), false]);
+  return {
+    src: "en", key: "en:" + card.id, id: card.id, name: card.name, sub: "",
+    set: card.set?.name, setId: card.set?.id, number: card.number, total: card.set?.printedTotal, rarity: card.rarity || "",
+    img: card.images?.small, imgL: card.images?.large, dex: card.nationalPokedexNumbers || [],
+    usd: bp.usd, variant: bp.variant, variantLabel: bp.variant ? (VARIANT_VI[bp.variant] || bp.variant) : "", eur, rows,
+    tcgUrl: card.tcgplayer?.url || "", cmUrl: card.cardmarket?.url || "",
+    priceAt: card.tcgplayer?.updatedAt || card.cardmarket?.updatedAt || ""
+  };
+}
+
+/* Japanese card from TCGdex -> common shape */
+function jaToDex(name) {
+  if (!name) return null;
+  const base = name.replace(/\s*(ex|EX|GX|V|VMAX|VSTAR|BREAK|LV\.X|ＧＸ|Ｖ|ＶＭＡＸ|ＶＳＴＡＲ)$/u, "").trim();
+  for (const nm of [name, base]) { const i = NAMES_JA.indexOf(nm); if (i >= 0) return i + 1; }
+  const i = NAMES_JA.findIndex(j => base.endsWith(j) || base.startsWith(j));
+  return i >= 0 ? i + 1 : null;
+}
+function normJP(card) {
+  const tp = card.pricing?.tcgplayer || {}, cm = card.pricing?.cardmarket || {};
+  const rows = []; let usd = null, variant = "";
+  const keys = Object.keys(tp).filter(k => tp[k] && typeof tp[k] === "object")
+    .sort((a, b) => ((TD_ORDER.indexOf(a) + 99) % 99) - ((TD_ORDER.indexOf(b) + 99) % 99));
+  for (const k of keys) {
+    const v = tp[k], val = v.marketPrice ?? v.midPrice ?? v.lowPrice;
+    if (val == null) continue;
+    rows.push(["TCGplayer · " + (VARIANT_TD[k] || k), money(val), true]);
+    if (usd == null) { usd = val; variant = VARIANT_TD[k] || k; }
+  }
+  const eur = cm["trend-holo"] ?? cm.trend ?? cm["avg-holo"] ?? cm.avg ?? null;
+  if (eur != null) rows.push(["Cardmarket trend", "€" + eur.toFixed(2), false]);
+  let dex = (card.dexId || []).filter(n => n >= 1 && n <= TOTAL);
+  if (!dex.length) { const d = jaToDex(card.name); if (d) dex = [d]; }
+  const en = dex.length ? NAMES_EN[dex[0] - 1] : card.name;
+  const img = card.image ? card.image + "/low.webp" : "", imgL = card.image ? card.image + "/high.webp" : "";
+  return {
+    src: "jp", key: "jp:" + card.id, id: card.id, name: en + " (JP)", sub: card.name,
+    set: card.set?.name, setId: card.set?.id, number: card.localId, total: card.set?.cardCount?.official, rarity: card.rarity || "",
+    img, imgL, dex, usd, variant: "", variantLabel: variant, eur, rows,
+    tcgUrl: "https://www.tcgplayer.com/search/pokemon-japan/product?productLineName=pokemon-japan&q=" + encodeURIComponent(en + " " + (card.localId || "")),
+    cmUrl: "", priceAt: tp.updated || cm.updated || ""
+  };
+}
+
+
+/* ---------- stats ---------- */
+function renderStats() {
+  const vals = Object.values(S.owned);
+  const n = vals.length;
+  $("sOwned").textContent = `${n} / ${TOTAL}`;
+  $("sBar").style.width = (n / TOTAL * 100).toFixed(2) + "%";
+  let sum = 0, noPrice = 0, cards = 0;
+  for (const o of vals) { if (o.card) { cards++; if (o.card.usd != null) sum += o.card.usd; else noPrice++; } }
+  $("sValue").textContent = "$" + sum.toFixed(2);
+  const bits = [`${cards} thẻ có dữ liệu`];
+  if (S.krw) bits.push("₩" + Math.round(sum * S.krw).toLocaleString("ko-KR"));
+  if (noPrice) bits.push(`${noPrice} thẻ chưa có giá`);
+  $("sValueNote").textContent = bits.join(" · ");
+}
+
+/* ---------- binder ---------- */
+function buildNav() {
+  const sel = $("pgSelect");
+  sel.innerHTML = "";
+  for (let p = 0; p < PAGES; p++) {
+    const a = p * PER + 1, b = Math.min(TOTAL, a + PER - 1);
+    sel.add(new Option(`#${pad(a)}–${pad(b)}`, p));
+  }
+  const g = $("gens");
+  GENS.forEach(([a], i) => {
+    const btn = document.createElement("button");
+    btn.textContent = "Gen " + (i + 1);
+    btn.onclick = () => goPage(Math.floor((a - 1) / PER), a);
+    g.append(btn);
+  });
+}
+function goPage(p, flashNo) {
+  S.page = Math.max(0, Math.min(PAGES - 1, p)); save(); renderBinder();
+  if (flashNo) { const el = document.querySelector(`[data-no="${flashNo}"]`); if (el) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); } }
+}
+function renderBinder() {
+  const p = S.page, a = p * PER + 1;
+  $("pgLabel").innerHTML = `Trang ${p + 1} / ${PAGES}<em>#${pad(a)}–${pad(Math.min(TOTAL, a + PER - 1))}</em>`;
+  $("pgSelect").value = p;
+  $("prev").disabled = p === 0; $("next").disabled = p === PAGES - 1;
+  document.querySelectorAll("#gens button").forEach((b, i) => {
+    const [x, y] = GENS[i]; b.classList.toggle("on", a <= y && a + PER - 1 >= x);
+  });
+  const grid = $("grid"); grid.innerHTML = "";
+  for (let i = 0; i < PER; i++) {
+    const n = a + i;
+    const cell = document.createElement("button");
+    if (n > TOTAL) { cell.className = "pocket"; cell.disabled = true; cell.style.opacity = .35; grid.append(cell); continue; }
+    const o = S.owned[n];
+    cell.className = "pocket" + (o && !o.card ? " manual" : "");
+    cell.dataset.no = n;
+    cell.setAttribute("aria-label", `#${n} ${NAMES_EN[n-1]}${o ? " – đã có" : ""}`);
+    if (o && o.card) {
+      cell.innerHTML = `<span class="no">${pad(n)}</span><img class="cardimg" loading="lazy" alt="" src="${esc(o.card.img)}">` +
+        (o.card.usd != null ? `<span class="tag">${money(o.card.usd)}</span>` : "");
+    } else {
+      cell.innerHTML = `<span class="no">${pad(n)}</span>${o ? '<span class="tick">✓</span>' : ""}<img class="spr" loading="lazy" alt="" src="${SPR(n)}"><span class="nm">${esc(NAMES_EN[n-1])}</span>`;
+    }
+    cell.onclick = () => openSlot(n);
+    grid.append(cell);
+  }
+}
+
+/* ---------- list ---------- */
+function renderList() {
+  const q = $("listQ").value.trim().toLowerCase(), f = $("listF").value;
+  const qn = /^\d+$/.test(q) ? +q : null;
+  const out = [];
+  for (let n = 1; n <= TOTAL; n++) {
+    const have = !!S.owned[n];
+    if (f === "have" && !have) continue;
+    if (f === "miss" && have) continue;
+    if (q) {
+      const hit = qn ? (n === qn || String(n).includes(q)) : (NAMES_EN[n-1].toLowerCase().includes(q) || NAMES_KO[n-1].includes(q));
+      if (!hit) continue;
+    }
+    const o = S.owned[n];
+    const st = !o ? "chưa có" : o.card ? (o.card.usd != null ? money(o.card.usd) : "có thẻ") : "đã có";
+    out.push(`<div class="row${have ? " have" : ""}"><input type="checkbox" data-n="${n}" ${have ? "checked" : ""} aria-label="Đánh dấu có #${n}">` +
+      `<span class="n">#${pad(n)}</span><img loading="lazy" alt="" src="${SPR_S(n)}">` +
+      `<button class="go who" data-go="${n}">${esc(NAMES_EN[n-1])}<small>${esc(NAMES_KO[n-1])}</small></button><span class="st">${st}</span></div>`);
+  }
+  $("dexlist").innerHTML = out.join("") || `<p style="padding:16px;color:var(--ink-3)">Không có Pokémon nào khớp.</p>`;
+}
+$("dexlist").addEventListener("change", e => {
+  const n = +e.target.dataset.n; if (!n) return;
+  if (e.target.checked) S.owned[n] = S.owned[n] || { at: Date.now() };
+  else delete S.owned[n];
+  save(); renderStats(); renderList();
+});
+$("dexlist").addEventListener("click", e => {
+  const b = e.target.closest("[data-go]"); if (!b) return;
+  const n = +b.dataset.go; setTab("binder"); goPage(Math.floor((n - 1) / PER), n);
+});
+$("listQ").oninput = renderList; $("listF").onchange = renderList;
+
+/* ---------- tabs ---------- */
+function setTab(t) {
+  $("tabBinder").setAttribute("aria-selected", t === "binder");
+  $("tabList").setAttribute("aria-selected", t === "list");
+  $("viewBinder").hidden = t !== "binder"; $("viewList").hidden = t !== "list";
+  if (t === "list") renderList(); else renderBinder();
+}
+$("tabBinder").onclick = () => setTab("binder");
+$("tabList").onclick = () => setTab("list");
+
+/* ---------- search ---------- */
+async function api(params) {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(Object.assign({ pageSize: "24", orderBy: "-set.releaseDate",
+    select: "id,name,number,rarity,set,images,tcgplayer,cardmarket,nationalPokedexNumbers,supertype" }, params))) if (v) sp.set(k, v);
+  const url = API + "?" + sp;
+  const headers = S.apiKey ? { "X-Api-Key": S.apiKey } : {};
+  const r = await fetch(url, { headers });
+  if (!r.ok) throw new Error("API trả lỗi " + r.status + (r.status === 429 ? " (tra quá nhanh, đợi chút hoặc thêm API key)" : ""));
+  return (await r.json()).data || [];
+}
+const normNum = s => /^\d+$/.test(s) ? String(+s) : s.toUpperCase();
+const nameQ = s => s.includes(" ") ? `name:"${s}"` : `name:${s}*`;
+
+async function lookup(raw) {
+  const s = raw.trim().replace(/\s+/g, " ");
+  if (!s) return [];
+  let m;
+  // 1. API id: sv3pt5-25, base1-4, swsh12pt5-160
+  if ((m = s.match(/^([a-z0-9]+(?:pt\d+)?)-([a-z0-9]+)$/i))) {
+    const r = await api({ q: `id:"${s.toLowerCase()}"` });
+    if (r.length) return r;
+  }
+  // 2. number/total: 58/102  or  pikachu 58/102
+  if ((m = s.match(/^(?:(.+?) )?([a-z]*\d+)\s*\/\s*([a-z]*\d+)$/i))) {
+    const q = [`number:${normNum(m[2])}`];
+    if (/^\d+$/.test(m[3])) q.push(`set.printedTotal:${+m[3]}`);
+    if (m[1]) q.push(nameQ(m[1]));
+    const r = await api({ q: q.join(" ") });
+    if (r.length) return r;
+  }
+  // 3. set code + number: MEW 25, PAF 54  — or name + number: pikachu 25
+  if ((m = s.match(/^(.+) ([a-z]*\d+[a-z]*)$/i))) {
+    const code = m[1], num = normNum(m[2]);
+    if (/^[a-z0-9]{2,6}$/i.test(code)) {
+      let r = await api({ q: `set.ptcgoCode:${code.toUpperCase()} number:${num}` });
+      if (r.length) return r;
+      r = await api({ q: `set.id:${code.toLowerCase()} number:${num}` });
+      if (r.length) return r;
+    }
+    const r = await api({ q: `${nameQ(code)} number:${num}` });
+    if (r.length) return r;
+  }
+  // 4. name
+  if (/[\/]/.test(s) || /^[a-z0-9]+-[a-z0-9]+$/i.test(s)) return [];
+  return api({ q: nameQ(s) });
+}
+
+/* ---------- Japanese cards (TCGdex) ---------- */
+const TD = "https://api.tcgdex.net/v2/ja";
+async function td(path) {
+  const r = await fetch(TD + path);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error("TCGdex trả lỗi " + r.status);
+  return r.json();
+}
+let jaSets = null;
+async function getJaSets() {
+  if (jaSets) return jaSets;
+  try { const c = JSON.parse(localStorage.getItem("td-ja-sets") || "null"); if (c && Date.now() - c.t < 864e5) return (jaSets = c.d); } catch (e) {}
+  jaSets = (await td("/sets")) || [];
+  try { localStorage.setItem("td-ja-sets", JSON.stringify({ t: Date.now(), d: jaSets })); } catch (e) {}
+  return jaSets;
+}
+function localForms(n) {
+  const s = String(n).toUpperCase();
+  if (/^\d+$/.test(s)) return [...new Set([s.padStart(3, "0"), String(+s), s])];
+  return [s];
+}
+async function jpSetCard(setId, num) {
+  for (const l of localForms(num)) {
+    const c = await td(`/sets/${encodeURIComponent(setId)}/${encodeURIComponent(l)}`);
+    if (c && c.id) return c;
+  }
+  return null;
+}
+function toJaName(s) {
+  if (/[぀-ヿ一-鿿]/.test(s)) return s;
+  const low = s.toLowerCase();
+  let i = NAMES_EN.findIndex(n => n.toLowerCase() === low);
+  if (i < 0) i = NAMES_KO.indexOf(s);
+  if (i < 0) i = NAMES_EN.findIndex(n => n.toLowerCase().startsWith(low));
+  return i >= 0 ? NAMES_JA[i] : null;
+}
+async function jpLookup(raw) {
+  const s = raw.trim().replace(/\s+/g, " ");
+  let m;
+  // 068/064  or  bruxish 068/064
+  if ((m = s.match(/^(?:(.+?) )?([a-z]*\d+)\s*\/\s*(\d+)$/i))) {
+    const total = +m[3];
+    const sets = (await getJaSets()).filter(x => x.cardCount && +x.cardCount.official === total).reverse().slice(0, 10);
+    let found = (await Promise.all(sets.map(x => jpSetCard(x.id, m[2]).catch(() => null)))).filter(Boolean);
+    if (m[1]) { const ja = toJaName(m[1]); if (ja) found = found.filter(c => (c.name || "").includes(ja)); }
+    return found;
+  }
+  // SV7a 068  or  sv7a-068
+  if ((m = s.match(/^([a-z0-9]+)[ -]([a-z]*\d+)$/i))) {
+    const set = (await getJaSets()).find(x => x.id.toLowerCase() === m[1].toLowerCase());
+    if (set) { const c = await jpSetCard(set.id, m[2]); return c ? [c] : []; }
+  }
+  // name (English, Korean or Japanese)
+  const ja = toJaName(s);
+  if (!ja) return [];
+  const list = (await td(`/cards?name=${encodeURIComponent(ja)}`)) || [];
+  const pick = list.slice(-12).reverse();
+  return (await Promise.all(pick.map(b => td(`/cards/${encodeURIComponent(b.id)}`).catch(() => null)))).filter(Boolean);
+}
+
+/* ---------- results ---------- */
+let lastResults = [];
+function linkRow(c) {
+  const term = encodeURIComponent(`${c.src === "jp" ? c.name.replace(" (JP)", "") + " japanese" : c.name} ${c.set || ""} ${c.number || ""}`);
+  const L = [];
+  if (c.tcgUrl) L.push(`<a href="${esc(c.tcgUrl)}" target="_blank" rel="noopener">TCGplayer</a>`);
+  if (c.cmUrl) L.push(`<a href="${esc(c.cmUrl)}" target="_blank" rel="noopener">Cardmarket</a>`);
+  L.push(`<a href="https://www.pricecharting.com/search-products?type=prices&q=${term}" target="_blank" rel="noopener">PriceCharting</a>`);
+  L.push(`<a href="https://www.ebay.com/sch/i.html?LH_Sold=1&LH_Complete=1&_nkw=${term}" target="_blank" rel="noopener">eBay đã bán</a>`);
+  L.push(`<a href="https://app.getcollectr.com/" target="_blank" rel="noopener">Collectr</a>`);
+  return `<div class="links">${L.join("")}</div>`;
+}
+function resultCard(c, i) {
+  const target = c.dex.find(n => n >= 1 && n <= TOTAL);
+  const occupied = target && S.owned[target]?.card;
+  const rows = c.rows.length ? c.rows.map(([l, v, b]) => `<div><span>${esc(l)}</span>${b ? `<b>${esc(v)}</b>` : `<span>${esc(v)}</span>`}</div>`).join("")
+    : `<div><span>${c.src === "jp" ? "Nguồn này chưa có giá cho thẻ này, bấm TCGplayer để xem" : "Chưa có dữ liệu giá"}</span></div>`;
+  return `<article class="res">
+    ${c.img ? `<img src="${esc(c.img)}" alt="${esc(c.name)}" loading="lazy" onerror="this.style.visibility='hidden'">` : `<div></div>`}
+    <div style="min-width:0">
+      <h3><span class="flag ${c.src}">${c.src === "jp" ? "JP" : "EN"}</span> ${esc(c.name)}</h3>
+      <div class="meta">${c.sub ? esc(c.sub) + " · " : ""}${esc(c.set)} · ${esc(c.number)}${c.total ? "/" + c.total : ""}${c.rarity ? " · " + esc(c.rarity) : ""}<br><code>${esc(c.id)}</code>${target ? ` · Pokédex #${pad(target)}` : ""}</div>
+      <div class="prices">${rows}</div>
+      ${linkRow(c)}
+      <div class="act">${target
+        ? `<button class="btn primary" data-add="${i}">${occupied ? "Thay vào ô #" + target : "Cho vào binder #" + target}</button>`
+        : `<span class="meta">Thẻ Trainer/Energy, không có ô Pokédex</span>`}</div>
+    </div></article>`;
+}
+function renderResults(list) {
+  lastResults = list;
+  const jp = list.map((c, i) => [c, i]).filter(([c]) => c.src === "jp");
+  const en = list.map((c, i) => [c, i]).filter(([c]) => c.src === "en");
+  let h = "";
+  if (jp.length) h += `<div class="grp">Thẻ Nhật · TCGdex</div>` + jp.map(([c, i]) => resultCard(c, i)).join("");
+  if (en.length) h += `<div class="grp">Thẻ Anh · pokemontcg.io</div>` + en.map(([c, i]) => resultCard(c, i)).join("");
+  $("results").innerHTML = h;
+}
+$("results").addEventListener("click", e => {
+  const b = e.target.closest("[data-add]"); if (!b) return;
+  const c = lastResults[+b.dataset.add];
+  const n = c.dex.find(x => x >= 1 && x <= TOTAL);
+  S.owned[n] = { at: Date.now(), card: c };
+  save(); renderStats(); setTab("binder"); goPage(Math.floor((n - 1) / PER), n);
+  toast(`Đã cho ${c.name} vào ô #${pad(n)}`);
+  renderResults(lastResults);
+});
+
+async function doSearch(q) {
+  $("sInput").value = q;
+  $("status").className = "status"; $("status").textContent = "Đang tra thẻ Nhật và thẻ Anh…"; $("results").innerHTML = "";
+  const [jp, en] = await Promise.allSettled([jpLookup(q), lookup(q)]);
+  const list = [
+    ...(jp.status === "fulfilled" ? jp.value.map(normJP) : []),
+    ...(en.status === "fulfilled" ? en.value.map(normEN) : [])
+  ];
+  const errs = [jp, en].filter(r => r.status === "rejected").map(r => r.reason);
+  if (errs.length === 2 && errs.every(x => x && (x.name === "TypeError" || /load failed|failed to fetch|network/i.test(x.message || "")))) {
+    $("status").className = "status err";
+    $("status").textContent = "Không kết nối được máy chủ thẻ. Nếu bạn đang mở trong khung xem trước của app Claude thì khung này chặn internet, hãy mở bằng Chrome hoặc Safari.";
+    return;
+  }
+  const notes = [];
+  const why = r => `${r.reason?.name || "Error"}: ${r.reason?.message || r.reason}`;
+  if (jp.status === "rejected") notes.push("nguồn thẻ Nhật lỗi (" + why(jp) + ")");
+  if (en.status === "rejected") notes.push("nguồn thẻ Anh lỗi (" + why(en) + ")");
+  if (errs.length) notes.push("đang mở từ: " + (location.protocol || "?") + " · " + (navigator.userAgent.match(/(CriOS|Chrome|Safari|Firefox)\/[\d.]+/)?.[0] || "?"));
+  $("status").textContent = (list.length ? `${list.length} thẻ khớp` : "Không tìm thấy thẻ. Thử 068/064, SV7a 068, sv3pt5-25 hoặc tên Pokémon.") + (notes.length ? " · " + notes.join(", ") : "");
+  renderResults(list);
+}
+$("sForm").onsubmit = e => { e.preventDefault(); doSearch($("sInput").value); };
+$("chips").onclick = e => { if (e.target.tagName === "BUTTON") doSearch(e.target.textContent); };
+
+async function refetch(c) {
+  if (c.src === "jp") { const r = await td(`/cards/${encodeURIComponent(c.id)}`); return r ? normJP(r) : null; }
+  const r = await api({ q: `id:"${c.id}"` }); return r[0] ? normEN(r[0]) : null;
+}
+
+
+/* ---------- slot dialog ---------- */
+function openSlot(n) {
+  const o = S.owned[n], c = o && o.card;
+  const art = c ? `<img class="big" src="${esc(c.imgL || c.img)}" alt="${esc(c.name)}">` : `<img class="big" src="${SPR(n)}" alt="">`;
+  const info = c ? `
+    <div class="meta" style="color:var(--ink-2);font-size:13px;margin-top:6px"><span class="flag ${c.src || "en"}">${c.src === "jp" ? "JP" : "EN"}</span> ${esc(c.name)}${c.sub ? " · " + esc(c.sub) : ""} · ${esc(c.set)} · ${esc(c.number)}${c.total ? "/" + c.total : ""}<br>${esc(c.rarity)} · <code>${esc(c.id)}</code></div>
+    <div class="prices" style="font-size:14px"><div><span>Giá TCGplayer${(c.variantLabel || c.variant) ? " · " + (c.variantLabel || VARIANT_VI[c.variant] || c.variant) : ""}</span><b>${money(c.usd)}${krw(c.usd)}</b></div>
+    ${c.eur != null ? `<div><span>Cardmarket trend</span><span>€${c.eur.toFixed(2)}</span></div>` : ""}
+    ${c.priceAt ? `<div><span>Cập nhật giá</span><span>${esc(c.priceAt)}</span></div>` : ""}</div>${linkRow(c)}`
+    : `<p style="color:var(--ink-2);font-size:13.5px">${o ? "Đã đánh dấu là có, chưa gắn thẻ cụ thể." : "Chưa có Pokémon này."}</p>`;
+  $("dlgBody").innerHTML = `<div class="dlg"><div>${art}</div><div>
+    <div class="meta" style="font:600 13px var(--f-display);color:var(--ink-3)">#${pad(n)}</div>
+    <h3>${esc(NAMES_EN[n-1])}</h3><div class="ko">${esc(NAMES_KO[n-1])} · ${esc(NAMES_JA[n-1])}</div>${info}
+    <div class="act">
+      <button class="btn primary" data-a="find">Tìm thẻ ${esc(NAMES_EN[n-1])}</button>
+      ${!o ? `<button class="btn" data-a="mark">Đánh dấu đã có</button>` : ""}
+      ${c ? `<button class="btn" data-a="refresh">Cập nhật giá</button>` : ""}
+      ${o ? `<button class="btn danger" data-a="remove">${c ? "Gỡ thẻ" : "Bỏ đánh dấu"}</button>` : ""}
+      <button class="btn" data-a="close">Đóng</button>
+    </div></div></div>`;
+  $("dlgBody").onclick = async e => {
+    const a = e.target.dataset.a; if (!a) return;
+    if (a === "close") $("dlg").close();
+    if (a === "find") { $("dlg").close(); doSearch(NAMES_EN[n-1]); $("sInput").scrollIntoView({ behavior: "smooth", block: "center" }); }
+    if (a === "mark") { S.owned[n] = { at: Date.now() }; done(); }
+    if (a === "remove") { delete S.owned[n]; done(); }
+    if (a === "refresh") {
+      e.target.textContent = "Đang cập nhật…";
+      try { const nc = await refetch(c); if (nc) { S.owned[n].card = nc; done(); openSlot(n); } else e.target.textContent = "Không tìm thấy"; }
+      catch (err) { e.target.textContent = "Lỗi, thử lại"; }
+    }
+    function done() { save(); renderStats(); renderBinder(); if (!$("viewList").hidden) renderList(); $("dlg").close(); }
+  };
+  if (!$("dlg").open) $("dlg").showModal();
+}
+
+/* ---------- settings ---------- */
+$("apiKey").value = S.apiKey || "";
+$("apiKey").onchange = e => { S.apiKey = e.target.value.trim(); save(); };
+$("krw").value = S.krw || "";
+$("krw").onchange = e => { S.krw = Math.max(0, +e.target.value || 0); save(); renderStats(); };
+$("refresh").onclick = async e => {
+  const entries = Object.entries(S.owned).filter(([, o]) => o.card);
+  if (!entries.length) return toast("Chưa có thẻ nào để cập nhật");
+  const btn = e.target; btn.disabled = true;
+  try {
+    const en = entries.filter(([, o]) => (o.card.src || "en") === "en"), jp = entries.filter(([, o]) => o.card.src === "jp");
+    for (let i = 0; i < en.length; i += 40) {
+      btn.textContent = `Đang cập nhật thẻ Anh ${i}/${en.length}…`;
+      const chunk = en.slice(i, i + 40);
+      const r = await api({ q: "(" + chunk.map(([, o]) => `id:"${o.card.id}"`).join(" OR ") + ")", pageSize: "250", orderBy: "" });
+      const byId = Object.fromEntries(r.map(c => [c.id, c]));
+      for (const [n, o] of chunk) if (byId[o.card.id]) S.owned[n].card = normEN(byId[o.card.id]);
+    }
+    for (let i = 0; i < jp.length; i++) {
+      btn.textContent = `Đang cập nhật thẻ Nhật ${i}/${jp.length}…`;
+      const [n, o] = jp[i]; const nc = await refetch(o.card).catch(() => null); if (nc) S.owned[n].card = nc;
+    }
+    save(); renderStats(); renderBinder(); toast("Đã cập nhật giá");
+  } catch (err) { toast("Cập nhật lỗi: " + err.message); }
+  btn.disabled = false; btn.textContent = "Cập nhật giá cả collection";
+};
+$("exportB").onclick = () => {
+  const blob = new Blob([JSON.stringify({ owned: S.owned, krw: S.krw }, null, 1)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = "pokedex-binder-" + new Date().toISOString().slice(0, 10) + ".json"; a.click();
+};
+$("importF").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const d = JSON.parse(await f.text()); if (!d.owned) throw 0; S.owned = d.owned; if (d.krw) S.krw = d.krw; save(); renderStats(); renderBinder(); toast("Đã nhập collection"); }
+  catch (err) { toast("File không đúng định dạng sao lưu"); }
+};
+
+/* ---------- misc ---------- */
+let tt; function toast(m) { const t = $("toast"); t.textContent = m; t.classList.add("on"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("on"), 2200); }
+$("prev").onclick = () => goPage(S.page - 1);
+$("next").onclick = () => goPage(S.page + 1);
+$("pgSelect").onchange = e => goPage(+e.target.value);
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input,select,textarea,dialog") || $("viewBinder").hidden) return;
+  if (e.key === "ArrowLeft") goPage(S.page - 1);
+  if (e.key === "ArrowRight") goPage(S.page + 1);
+});
+
+buildNav(); renderStats(); renderBinder();
+</script>
+
+</body>
+</html>
