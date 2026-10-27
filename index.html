@@ -226,8 +226,16 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <div class="status" id="status"></div>
       <div class="results" id="results"></div>
       <details class="set">
-        <summary>Cài đặt & sao lưu</summary>
+        <summary>Cài đặt, đồng bộ & sao lưu</summary>
         <div class="rowf">
+          <b style="color:var(--ink)">Đồng bộ giữa các máy (qua GitHub)</b>
+          <div class="status" id="syncStatus"></div>
+          <div id="syncOff" class="rowf" style="margin:0">
+            <label for="ghToken">Dán mã truy cập GitHub (chỉ cần làm 1 lần trên mỗi máy)</label>
+            <div><input class="field" id="ghToken" type="password" autocomplete="off" placeholder="github_pat_…" style="flex:1;min-width:0"><button class="btn primary" type="button" id="ghSave">Bật đồng bộ</button></div>
+          </div>
+          <div id="syncOn" hidden><button class="btn" type="button" id="ghSyncNow">Đồng bộ ngay</button><button class="btn danger" type="button" id="ghOff">Tắt trên máy này</button></div>
+          <hr style="border:0;border-top:1px solid var(--stitch);width:100%;margin:6px 0">
           <label for="apiKey">API key pokemontcg.io (không bắt buộc, giúp tra nhanh hơn)</label>
           <input class="field" id="apiKey" placeholder="dán key vào đây">
           <label for="krw">Tỷ giá KRW / USD (tự nhập, để 0 nếu không cần)</label>
@@ -263,9 +271,9 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 
 /* ---------- state ---------- */
 const KEY = "pokedex-binder-v1";
-let S = { owned: {}, page: 0, apiKey: "", krw: 0 };
+let S = { owned: {}, deleted: {}, page: 0, apiKey: "", krw: 0 };
 try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(S, JSON.parse(raw)); } catch (e) {}
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const save = (sync = true) => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} if (sync && typeof scheduleSync === "function") scheduleSync(); };
 
 /* ---------- prices ---------- */
 const VARIANT_ORDER = ["holofoil","normal","reverseHolofoil","1stEditionHolofoil","1stEditionNormal","unlimitedHolofoil","1stEdition","unlimited"];
@@ -442,8 +450,8 @@ function renderList() {
 }
 $("dexlist").addEventListener("change", e => {
   const n = +e.target.dataset.n; if (!n) return;
-  if (e.target.checked) S.owned[n] = S.owned[n] || { at: Date.now() };
-  else delete S.owned[n];
+  if (e.target.checked) { S.owned[n] = S.owned[n] || { at: Date.now() }; if (S.deleted) delete S.deleted[n]; }
+  else { delete S.owned[n]; (S.deleted ||= {})[n] = Date.now(); }
   save(); renderStats(); renderList();
 });
 $("dexlist").addEventListener("click", e => {
@@ -685,7 +693,7 @@ $("results").addEventListener("click", e => {
   const b = e.target.closest("[data-add]"); if (!b) return;
   const c = lastResults[+b.dataset.add];
   const n = c.dex.find(x => x >= 1 && x <= TOTAL);
-  S.owned[n] = { at: Date.now(), card: c };
+  S.owned[n] = { at: Date.now(), card: c }; if (S.deleted) delete S.deleted[n];
   save(); renderStats(); setTab("binder"); goPage(Math.floor((n - 1) / PER), n);
   toast(`Đã cho ${c.name} vào ô #${pad(n)}`);
   renderResults(lastResults);
@@ -753,8 +761,8 @@ function openSlot(n) {
     const a = e.target.dataset.a; if (!a) return;
     if (a === "close") $("dlg").close();
     if (a === "find") { $("dlg").close(); doSearch(NAMES_EN[n-1]); $("sInput").scrollIntoView({ behavior: "smooth", block: "center" }); }
-    if (a === "mark") { S.owned[n] = { at: Date.now() }; done(); }
-    if (a === "remove") { delete S.owned[n]; done(); }
+    if (a === "mark") { S.owned[n] = { at: Date.now() }; if (S.deleted) delete S.deleted[n]; done(); }
+    if (a === "remove") { delete S.owned[n]; (S.deleted ||= {})[n] = Date.now(); done(); }
     if (a === "refresh") {
       e.target.textContent = "Đang cập nhật…";
       try { const nc = await refetch(c); if (nc) { S.owned[n].card = nc; done(); openSlot(n); } else e.target.textContent = "Không tìm thấy"; }
@@ -799,9 +807,91 @@ $("exportB").onclick = () => {
 };
 $("importF").onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
-  try { const d = JSON.parse(await f.text()); if (!d.owned) throw 0; S.owned = d.owned; if (d.krw) S.krw = d.krw; save(); renderStats(); renderBinder(); toast("Đã nhập collection"); }
+  try { const d = JSON.parse(await f.text()); if (!d.owned) throw 0; const now = Date.now(); for (const k in d.owned) d.owned[k].at = now; S.owned = d.owned; S.deleted = {}; if (d.krw) S.krw = d.krw; save(); renderStats(); renderBinder(); toast("Đã nhập collection"); }
   catch (err) { toast("File không đúng định dạng sao lưu"); }
 };
+
+/* ---------- sync collection through the GitHub repo (branch "collection", file collection.json) ---------- */
+const GH = (() => {
+  const host = location.hostname.match(/^([^.]+)\.github\.io$/i);
+  const seg = location.pathname.split("/").filter(Boolean)[0];
+  return { owner: host ? host[1] : "TranQuang1705", repo: host && seg ? seg : "pokedex-binder", branch: "collection", path: "collection.json" };
+})();
+const TOKEN_KEY = "pokedex-binder-gh-token";
+let ghToken = ""; try { ghToken = localStorage.getItem(TOKEN_KEY) || ""; } catch (e) {}
+let syncTimer = null, syncing = false, syncAgain = false, remoteSha = null;
+const b64enc = s => btoa(unescape(encodeURIComponent(s)));
+const b64dec = s => decodeURIComponent(escape(atob(s.replace(/\n/g, ""))));
+async function gh(path, opts = {}) {
+  const r = await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}${path}`, {
+    ...opts, cache: "no-store",
+    headers: { Accept: "application/vnd.github+json", Authorization: "Bearer " + ghToken, ...(opts.body ? { "Content-Type": "application/json" } : {}) }
+  });
+  if (r.status === 404) return null;
+  if (!r.ok) { const e = new Error(r.status === 401 ? "mã truy cập sai hoặc đã hết hạn" : r.status === 403 ? "mã chưa có quyền ghi (Contents: Read and write)" : "GitHub lỗi " + r.status); e.status = r.status; throw e; }
+  return r.status === 204 ? {} : r.json();
+}
+function syncMsg(t, err) { const el = $("syncStatus"); if (el) { el.textContent = t; el.className = "status" + (err ? " err" : ""); } }
+function mergeRemote(remote) {
+  const own = S.owned, del = S.deleted || (S.deleted = {});
+  const rOwn = remote.owned || {}, rDel = remote.deleted || {};
+  let changed = false;
+  for (const n of new Set([...Object.keys(own), ...Object.keys(del), ...Object.keys(rOwn), ...Object.keys(rDel)])) {
+    const cands = [
+      [own[n]?.at || 0, "lo"], [del[n] || 0, "ld"], [rOwn[n]?.at || 0, "ro"], [rDel[n] || 0, "rd"]
+    ].sort((a, b) => b[0] - a[0]);
+    const win = cands[0][1];
+    if (win === "ro" && JSON.stringify(own[n]) !== JSON.stringify(rOwn[n])) { own[n] = rOwn[n]; delete del[n]; changed = true; }
+    if (win === "rd" && (own[n] || !del[n])) { delete own[n]; del[n] = rDel[n]; changed = true; }
+  }
+  return changed;
+}
+async function ensureBranch() {
+  if (await gh(`/branches/${GH.branch}`)) return;
+  const repo = await gh("");
+  const head = await gh(`/git/ref/heads/${repo.default_branch}`);
+  await gh("/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/" + GH.branch, sha: head.object.sha }) });
+}
+async function syncNow() {
+  if (!ghToken) return;
+  if (syncing) { syncAgain = true; return; }
+  syncing = true; syncMsg("Đang đồng bộ…");
+  try {
+    await ensureBranch();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const file = await gh(`/contents/${GH.path}?ref=${GH.branch}`);
+      remoteSha = file ? file.sha : null;
+      let remoteText = "";
+      if (file) { remoteText = b64dec(file.content); const changed = mergeRemote(JSON.parse(remoteText)); if (changed) { save(false); renderStats(); renderBinder(); if (!$("viewList").hidden) renderList(); } }
+      const body = JSON.stringify({ v: 1, owned: S.owned, deleted: S.deleted || {}, krw: S.krw || 0 }, null, 1);
+      if (body === remoteText) break;
+      try {
+        const res = await gh(`/contents/${GH.path}`, { method: "PUT", body: JSON.stringify({
+          message: "Update collection (" + Object.keys(S.owned).length + "/1025)", content: b64enc(body), branch: GH.branch, ...(remoteSha ? { sha: remoteSha } : {}) }) });
+        remoteSha = res.content?.sha || null;
+        break;
+      } catch (e) { if (e.status !== 409 && e.status !== 422) throw e; }  // someone else wrote first: pull again and retry
+    }
+    syncMsg("Đã đồng bộ lúc " + new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
+  } catch (e) {
+    syncMsg("Đồng bộ lỗi: " + (e.message || e) + (e instanceof TypeError ? " (kiểm tra mạng)" : ""), true);
+  }
+  syncing = false;
+  if (syncAgain) { syncAgain = false; syncNow(); }
+}
+function scheduleSync() { if (!ghToken) return; clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, 1500); }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") syncNow(); });
+function renderSyncBox() {
+  $("syncOn").hidden = !ghToken; $("syncOff").hidden = !!ghToken;
+  if (!ghToken) syncMsg("Chưa bật. Collection hiện chỉ lưu trên máy này.");
+}
+$("ghSave").onclick = () => {
+  const t = $("ghToken").value.trim(); if (!t) return;
+  ghToken = t; try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}
+  $("ghToken").value = ""; renderSyncBox(); syncNow();
+};
+$("ghSyncNow").onclick = () => syncNow();
+$("ghOff").onclick = () => { ghToken = ""; try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} renderSyncBox(); };
 
 /* ---------- misc ---------- */
 let tt; function toast(m) { const t = $("toast"); t.textContent = m; t.classList.add("on"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("on"), 2200); }
@@ -816,6 +906,7 @@ document.addEventListener("keydown", e => {
 
 buildNav(); renderStats(); renderBinder();
 refreshTpOwned().then(n => { if (n) renderBinder(); });
+renderSyncBox(); syncNow();
 </script>
 
 </body>
