@@ -1,4 +1,4 @@
-name: Sync TCGplayer JP data
+name: Sync TCGplayer data
 
 on:
   schedule:
@@ -31,8 +31,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/tcgplayer-jp.json
+          git add data/
           if git diff --cached --quiet; then echo "no changes"; exit 0; fi
-          git commit -m "Update TCGplayer JP data $(date -u +%F)"
+          git commit -m "Update TCGplayer data $(date -u +%F)"
           git pull --rebase origin main
           git push
